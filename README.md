@@ -6,7 +6,6 @@ Interaktywne animacje 3D dla stron firmowych. Strona: https://tomaszkowallike-pr
 |---|---|
 | Ocieplenie elewacji | wi-bud.pl |
 | Dom bunkier | brickon.pl |
-| Tablica domen | domena.pl |
 | Rejestracja domen (makieta) | domena.pl |
 | Zegarek — teardown | demo techniczne |
 
