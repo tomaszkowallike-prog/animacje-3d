@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ocieplenie elewacji — krok po kroku</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#1f2a33;--muted:#6b7680;--line:#e3e1dc;--accent:#e46f1f;--accent-soft:#fdebdc;--bg:#f6f4f0}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;font-family:Inter,system-ui,sans-serif;color:var(--ink);background:radial-gradient(ellipse at 40% 35%,#ffffff 0%,#f6f4f0 55%,#ece9e3 100%)}
+canvas{display:block}
+#stage{position:fixed;inset:0;right:340px}
+#panel{position:fixed;top:0;right:0;bottom:0;width:340px;background:rgba(255,255,255,.86);backdrop-filter:blur(8px);border-left:1px solid var(--line);padding:22px 22px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:18px}
+h1{font-size:19px;margin:0;letter-spacing:-.01em}
+.sub{font-size:12.5px;color:var(--muted);margin-top:4px}
+ol.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+ol.steps li{display:flex;gap:10px;align-items:flex-start;padding:7px 8px;border-radius:8px;font-size:13px;color:var(--muted);cursor:pointer;transition:background .2s,color .2s}
+ol.steps li .n{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid #d6d2ca;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:#fff}
+ol.steps li.done{color:var(--ink)}
+ol.steps li.done .n{background:var(--ink);border-color:var(--ink);color:#fff}
+ol.steps li.cur{background:var(--accent-soft);color:var(--ink);font-weight:600}
+ol.steps li.cur .n{background:var(--accent);border-color:var(--accent);color:#fff}
+ol.steps li:hover{background:#f3f1ec}
+.lbl{font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--muted);margin-bottom:8px}
+#xsec svg{width:100%;height:auto;display:block}
+.sw{display:flex;gap:8px;flex-wrap:wrap}
+.sw button{width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #d6d2ca;cursor:pointer}
+.sw button.on{box-shadow:0 0 0 2px var(--accent)}
+.seg{display:flex;background:#efece6;border-radius:9px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:transparent;border-radius:7px;padding:6px 8px;font:600 12px Inter;color:var(--muted);cursor:pointer}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+#cap{position:fixed;left:24px;top:22px;max-width:min(520px,calc(100vw - 400px));pointer-events:none}
+#cap .k{font:800 12px Inter;letter-spacing:.14em;color:var(--accent)}
+#cap .t{font:800 clamp(20px,2.4vw,28px) Inter;letter-spacing:-.02em;margin-top:4px}
+#cap .d{font-size:14.5px;line-height:1.5;color:#45525c;margin-top:8px;background:rgba(255,255,255,.75);border-radius:10px;padding:10px 12px;border:1px solid var(--line)}
+#legend{position:fixed;left:24px;bottom:84px;display:none;align-items:center;gap:8px;font:600 11px Inter;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+#legend i{display:block;width:140px;height:10px;border-radius:5px;background:linear-gradient(90deg,#1b1f6b,#5b2fa0,#c2357b,#ef6a2a,#ffd23f,#fffbe0)}
+#bar{position:fixed;left:24px;right:364px;bottom:22px;display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;box-shadow:0 6px 20px rgba(0,0,0,.05)}
+#bar button{border:1px solid var(--line);background:#fff;border-radius:8px;font:600 12px Inter;padding:6px 10px;cursor:pointer;color:var(--ink)}
+#bar button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+#scrub{flex:1;accent-color:var(--accent)}
+@media (max-width:860px){
+  #stage{right:0;bottom:46vh}
+  #panel{top:auto;height:46vh;width:100%;border-left:0;border-top:1px solid var(--line);padding:14px 16px}
+  #cap{max-width:calc(100vw - 32px);left:16px;top:12px}
+  #cap .d{font-size:13px;padding:8px 10px}
+  #bar{left:12px;right:12px;bottom:calc(46vh + 10px)}
+  #legend{bottom:calc(46vh + 64px);left:12px}
+  ol.steps li{padding:5px 6px}
+}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="cap"><div class="k" id="capk"></div><div class="t" id="capt"></div><div class="d" id="capd"></div></div>
+<div id="legend">zimno <i></i> ciepło · ilustracja</div>
+<aside id="panel">
+  <div><h1>Ocieplenie elewacji</h1><div class="sub">System ETICS — styropian lub wełna, klej, łączniki, siatka, tynk</div></div>
+  <div><div class="lbl">ETAPY PRAC</div><ol class="steps" id="steps"></ol></div>
+  <div id="xsec"><div class="lbl">PRZEKRÓJ ŚCIANY</div><svg id="xs" viewBox="0 0 300 150"></svg></div>
+  <div><div class="lbl">KOLOR TYNKU</div><div class="sw" id="sw"></div></div>
+  <div><div class="lbl">FAKTURA</div><div class="seg" id="tex"><button class="on" data-t="baranek">Baranek 1,5 mm</button><button data-t="kornik">Kornik 2,0 mm</button></div></div>
+</aside>
+<div id="bar">
+  <button id="play" class="on">❚❚</button>
+  <input id="scrub" type="range" min="0" max="1000" value="0" aria-label="Oś czasu">
+  <button data-s="0.5">½×</button><button data-s="1" class="on">1×</button><button data-s="2">2×</button>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const PI = Math.PI;
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const ease = x => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const ramp = (t, a, b) => ease((t - a) / (b - a));
+const lin = (t, a, b) => clamp((t - a) / (b - a));
+const easeOutBack = x => { const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+
+/* ---------- renderer ---------- */
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
+renderer.localClippingEnabled = true;
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const camera = new THREE.PerspectiveCamera(34, 1, 0.5, 400);
+camera.position.set(0, 9, 30);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.enableZoom = false; controls.enablePan = false;
+controls.minPolarAngle = 0.5; controls.maxPolarAngle = 1.45;
+let userZoom = 1;
+renderer.domElement.addEventListener('wheel', e => { e.preventDefault(); userZoom = clamp(userZoom * (1 + e.deltaY * 0.001), 0.5, 1.8); }, { passive: false });
+scene.add(new THREE.HemisphereLight(0xffffff, 0xe9e4da, 0.9));
+const sun = new THREE.DirectionalLight(0xfff4e6, 2.2);
+sun.position.set(14, 22, 16); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.left = -16; sun.shadow.camera.right = 16; sun.shadow.camera.top = 16; sun.shadow.camera.bottom = -16; sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.02;
+scene.add(sun);
+function resize() { const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize);
+
+const house = new THREE.Group(); scene.add(house);
+
+/* ---------- helpers ---------- */
+function canvasTex(w, h, draw, srgb = true) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+const rnd = (() => { let s = 12345; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+function rectShape(u0, u1, v0, v1, holes = []) {
+  const s = new THREE.Shape(); s.moveTo(u0, v0);
+  holes.filter(o => o.v0 <= v0 + 1e-3).sort((a, b) => a.u0 - b.u0).forEach(o => { s.lineTo(o.u0, v0); s.lineTo(o.u0, o.v1); s.lineTo(o.u1, o.v1); s.lineTo(o.u1, v0); });
+  s.lineTo(u1, v0); s.lineTo(u1, v1); s.lineTo(u0, v1); s.closePath();
+  holes.filter(o => o.v0 > v0 + 1e-3).forEach(o => { const p = new THREE.Path(); p.moveTo(o.u0, o.v0); p.lineTo(o.u0, o.v1); p.lineTo(o.u1, o.v1); p.lineTo(o.u1, o.v0); p.closePath(); s.holes.push(p); });
+  return s;
+}
+function mesh(geo, mat, parent, x = 0, y = 0, z = 0) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; parent && parent.add(m); return m; }
+
+/* ---------- dimensions ---------- */
+const W = 10, D = 8, H = 6, T = 0.2, BASE = 0.3; // T = exaggerated insulation thickness
+const WALLS = [
+  { id: 'front', origin: new THREE.Vector3(0, 0, D / 2), u: new THREE.Vector3(1, 0, 0), n: new THREE.Vector3(0, 0, 1), u0: -W / 2, u1: W / 2,
+    openings: [
+      { u0: -3.6, u1: -2.5, v0: 0, v1: 2.2, door: true },
+      { u0: -0.3, u1: 1.3, v0: 0.9, v1: 2.3 }, { u0: 2.4, u1: 4.0, v0: 0.9, v1: 2.3 },
+      { u0: -3.8, u1: -2.3, v0: 3.9, v1: 5.2 }, { u0: -0.3, u1: 1.3, v0: 3.9, v1: 5.2 }, { u0: 2.4, u1: 4.0, v0: 3.9, v1: 5.2 }] },
+  { id: 'side', origin: new THREE.Vector3(W / 2, 0, 0), u: new THREE.Vector3(0, 0, -1), n: new THREE.Vector3(1, 0, 0), u0: -D / 2, u1: D / 2,
+    openings: [{ u0: -0.9, u1: 0.9, v0: 0.9, v1: 2.3 }, { u0: -2.8, u1: -1.4, v0: 3.9, v1: 5.2 }, { u0: 1.2, u1: 2.6, v0: 3.9, v1: 5.2 }] },
+];
+// local frame for each wall: x = along wall, y = up, z = outward normal
+WALLS.forEach(w => {
+  w.g = new THREE.Group(); w.g.position.copy(w.origin);
+  w.g.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(w.u, new THREE.Vector3(0, 1, 0), w.n));
+  house.add(w.g);
+});
+
+/* ================= TEXTURES ================= */
+const blockTex = canvasTex(1024, 512, (g, w, h) => { // 2 m × 1 m of masonry
+  g.fillStyle = '#9a6a52'; g.fillRect(0, 0, w, h);
+  const bw = w / 4, bh = h / 4;
+  for (let r = 0; r < 4; r++) for (let c = -1; c < 5; c++) {
+    const x = c * bw + (r % 2) * bw / 2, y = r * bh;
+    const l = rnd() * 18; g.fillStyle = `rgb(${190 + l},${118 + l},${82 + l})`; g.fillRect(x + 4, y + 4, bw - 8, bh - 8);
+    for (let k = 0; k < 120; k++) { g.fillStyle = `rgba(90,80,70,${rnd() * 0.12})`; g.fillRect(x + 4 + rnd() * (bw - 10), y + 4 + rnd() * (bh - 10), 2, 2); }
+  }
+});
+blockTex.wrapS = blockTex.wrapT = THREE.RepeatWrapping; blockTex.repeat.set(0.5, 1);
+const epsTex = canvasTex(256, 128, (g, w, h) => {
+  g.fillStyle = '#f7f7f3'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 1400; i++) { const r = 1 + rnd() * 2.2; g.strokeStyle = `rgba(150,150,140,${0.12 + rnd() * 0.12})`; g.beginPath(); g.arc(rnd() * w, rnd() * h, r, 0, 2 * PI); g.stroke(); }
+  g.strokeStyle = 'rgba(120,120,110,.35)'; g.lineWidth = 2; g.strokeRect(1, 1, w - 2, h - 2);
+});
+const glueTex = canvasTex(256, 128, (g, w, h) => { // back of board: perimeter bead + dabs
+  g.fillStyle = '#f2f2ee'; g.fillRect(0, 0, w, h);
+  g.strokeStyle = '#9b978f'; g.lineWidth = 16; g.lineJoin = 'round'; g.strokeRect(18, 18, w - 36, h - 36);
+  g.fillStyle = '#9b978f';
+  [[w * .3, h * .5], [w * .5, h * .5], [w * .7, h * .5]].forEach(([x, y]) => { g.beginPath(); g.ellipse(x, y, 20, 18, 0, 0, 2 * PI); g.fill(); });
+});
+function meshTex(color, alpha) {
+  const t = canvasTex(256, 256, (g, w, h) => {
+    g.clearRect(0, 0, w, h); g.strokeStyle = color; g.lineWidth = 3; g.globalAlpha = alpha;
+    for (let i = 0; i <= w; i += 32) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, h); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(w, i); g.stroke(); }
+  });
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+}
+const meshGrid = meshTex('#e8b23a', 1); meshGrid.repeat.set(4, 4);
+const reinfTex = canvasTex(512, 512, (g, w, h) => {
+  g.fillStyle = '#cfccc5'; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 9000; i++) { g.fillStyle = `rgba(${rnd() < .5 ? '255,255,255' : '90,90,90'},${rnd() * 0.08})`; g.fillRect(rnd() * w, rnd() * h, 3, 3); }
+  g.strokeStyle = 'rgba(214,160,60,.35)'; g.lineWidth = 2;
+  for (let i = 0; i <= w; i += 32) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, h); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(w, i); g.stroke(); }
+});
+reinfTex.wrapS = reinfTex.wrapT = THREE.RepeatWrapping; reinfTex.repeat.set(1, 1);
+function plasterTex(kind) {
+  const t = canvasTex(512, 512, (g, w, h) => {
+    g.fillStyle = '#f2f2f2'; g.fillRect(0, 0, w, h);
+    if (kind === 'baranek') {
+      for (let i = 0; i < 26000; i++) { const x = rnd() * w, y = rnd() * h, r = 1 + rnd() * 1.8; g.fillStyle = `rgba(255,255,255,${0.5 + rnd() * .5})`; g.beginPath(); g.arc(x, y, r, 0, 2 * PI); g.fill(); g.fillStyle = `rgba(0,0,0,${0.08 + rnd() * .1})`; g.beginPath(); g.arc(x + r * .6, y + r * .6, r * .7, 0, 2 * PI); g.fill(); }
+    } else {
+      for (let i = 0; i < 9000; i++) { g.fillStyle = `rgba(0,0,0,${rnd() * 0.05})`; g.fillRect(rnd() * w, rnd() * h, 2, 2); }
+      for (let i = 0; i < 1600; i++) {
+        const x = rnd() * w, y = rnd() * h, a = rnd() * 2 * PI, L = 6 + rnd() * 14;
+        g.strokeStyle = `rgba(0,0,0,${0.18 + rnd() * .14})`; g.lineWidth = 1.6 + rnd(); g.beginPath(); g.moveTo(x, y);
+        g.quadraticCurveTo(x + Math.cos(a + .6) * L * .6, y + Math.sin(a + .6) * L * .6, x + Math.cos(a) * L, y + Math.sin(a) * L); g.stroke();
+        g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = 1; g.beginPath(); g.moveTo(x + 1, y + 1); g.lineTo(x + Math.cos(a) * L + 1, y + Math.sin(a) * L + 1); g.stroke();
+      }
+    }
+  });
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1.6, 1.6); return t;
+}
+const PLASTER = { baranek: plasterTex('baranek'), kornik: plasterTex('kornik') };
+function thermalTex(w, before) {
+  const span = w.u1 - w.u0 + T, ppm = 64;
+  const t = canvasTex(Math.round(span * ppm), Math.round(H * ppm), (g, cw, ch) => {
+    const X = u => (u - w.u0) * ppm, Y = v => (H - v) * ppm;
+    const grd = g.createLinearGradient(0, 0, 0, ch);
+    if (before) { grd.addColorStop(0, '#f08a2a'); grd.addColorStop(.5, '#d94a3a'); grd.addColorStop(1, '#c2357b'); }
+    else { grd.addColorStop(0, '#3a2c8e'); grd.addColorStop(1, '#1b1f6b'); }
+    g.fillStyle = grd; g.fillRect(0, 0, cw, ch);
+    const blob = (x, y, r, c) => { const rg = g.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, c); rg.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = rg; g.fillRect(x - r, y - r, 2 * r, 2 * r); };
+    if (before) {
+      g.fillStyle = 'rgba(255,214,70,.75)'; g.fillRect(0, Y(3.15), cw, 0.3 * ppm); // slab thermal bridge
+      g.fillStyle = 'rgba(255,214,70,.55)'; g.fillRect(0, Y(H), cw, 0.25 * ppm);
+      w.openings.forEach(o => blob(X((o.u0 + o.u1) / 2), Y((o.v0 + o.v1) / 2), 1.6 * ppm, 'rgba(255,230,120,.85)'));
+      blob(X(w.u1), ch / 2, 1.2 * ppm, 'rgba(255,220,90,.6)');
+      for (let i = 0; i < 30; i++) blob(rnd() * cw, rnd() * ch, (0.4 + rnd()) * ppm, 'rgba(255,150,60,.25)');
+    } else {
+      w.openings.forEach(o => blob(X((o.u0 + o.u1) / 2), Y((o.v0 + o.v1) / 2), 1.0 * ppm, 'rgba(194,53,123,.75)'));
+      for (let i = 0; i < 20; i++) blob(rnd() * cw, rnd() * ch, (0.4 + rnd()) * ppm, 'rgba(91,47,160,.35)');
+    }
+  });
+  t.repeat.set(1 / span, 1 / H); t.offset.set(-w.u0 / span, 0); return t;
+}
+
+/* ================= MATERIALS ================= */
+const M = {
+  wall: new THREE.MeshStandardMaterial({ map: blockTex, roughness: 0.95 }),
+  plinth: new THREE.MeshStandardMaterial({ color: 0x8d8a84, roughness: 0.9 }),
+  roof: new THREE.MeshStandardMaterial({ color: 0x4a4f55, roughness: 0.75 }),
+  fascia: new THREE.MeshStandardMaterial({ color: 0x3b3f44, roughness: 0.6 }),
+  frame: new THREE.MeshStandardMaterial({ color: 0xf4f4f2, roughness: 0.4 }),
+  glass: new THREE.MeshStandardMaterial({ color: 0x9fb7c4, roughness: 0.05, metalness: 0.6 }),
+  door: new THREE.MeshStandardMaterial({ color: 0x6b4a33, roughness: 0.6 }),
+  metal: new THREE.MeshStandardMaterial({ color: 0xb9bdc1, roughness: 0.35, metalness: 0.9 }),
+  gutter: new THREE.MeshStandardMaterial({ color: 0x5a5f65, roughness: 0.4, metalness: 0.5 }),
+  eps: [null, null, null, null, null, null],
+  dowel: new THREE.MeshStandardMaterial({ color: 0xfafafa, roughness: 0.5 }),
+  pull: new THREE.MeshStandardMaterial({ color: 0xf7f7f3, roughness: 0.8 }),
+  scaff: new THREE.MeshStandardMaterial({ color: 0xa8b0b8, roughness: 0.4, metalness: 0.7 }),
+  plank: new THREE.MeshStandardMaterial({ color: 0xc89a5e, roughness: 0.8 }),
+  ground: new THREE.MeshStandardMaterial({ color: 0xece9e2, roughness: 1 }),
+  path: new THREE.MeshStandardMaterial({ color: 0xd9d4ca, roughness: 1 }),
+  strip: new THREE.MeshStandardMaterial({ map: meshGrid, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.7 }),
+};
+const epsSide = new THREE.MeshStandardMaterial({ color: 0xeeeee8, roughness: 0.9 });
+const epsFront = new THREE.MeshStandardMaterial({ map: epsTex, roughness: 0.9 });
+const epsBack = new THREE.MeshStandardMaterial({ map: glueTex, roughness: 0.95 });
+M.eps = [epsSide, epsSide, epsSide, epsSide, epsFront, epsBack];
+
+// sweep planes (top-down reveal) — world-space y clipping
+const sweep = { primer: new THREE.Plane(new THREE.Vector3(0, 1, 0), -99), reinf: new THREE.Plane(new THREE.Vector3(0, 1, 0), -99), plaster: new THREE.Plane(new THREE.Vector3(0, 1, 0), -99) };
+const coatMat = {
+  primer: new THREE.MeshStandardMaterial({ color: 0x8fa3b8, transparent: true, opacity: 0.28, roughness: 0.6, clippingPlanes: [sweep.primer], depthWrite: false }),
+  reinf: new THREE.MeshStandardMaterial({ map: reinfTex, roughness: 0.9, clippingPlanes: [sweep.reinf] }),
+  plaster: new THREE.MeshStandardMaterial({ color: 0xe8dcc4, map: PLASTER.baranek, bumpMap: PLASTER.baranek, bumpScale: 1.2, roughness: 0.95, clippingPlanes: [sweep.plaster] }),
+};
+
+const revealPl = new THREE.MeshStandardMaterial({ color: 0xe8dcc4, map: PLASTER.baranek, roughness: 0.95 });
+/* ================= GROUND & CORE ================= */
+mesh(new THREE.CircleGeometry(40, 64).rotateX(-PI / 2), M.ground, scene).castShadow = false;
+mesh(new THREE.BoxGeometry(1.6, 0.04, 6).translate(0, 0.02, 0), M.path, house, -3.05, 0, D / 2 + 3);
+// back/left walls (simple) + roof
+mesh(new THREE.BoxGeometry(W, H, 0.35), M.wall, house, 0, H / 2, -D / 2 + 0.175);
+mesh(new THREE.BoxGeometry(0.35, H, D), M.wall, house, -W / 2 + 0.175, H / 2, 0);
+mesh(new THREE.BoxGeometry(W - 0.7, 0.2, D - 0.7), M.plinth, house, 0, 3.0, 0);
+{
+  const o = 0.65, x0 = W / 2 + o, z0 = D / 2 + o, rh = 2.6, rx = W / 2 - D / 2;
+  const v = [[-x0, H, z0], [x0, H, z0], [x0, H, -z0], [-x0, H, -z0], [-rx, H + rh, 0], [rx, H + rh, 0]];
+  const faces = [[0, 1, 5], [0, 5, 4], [1, 2, 5], [2, 3, 4], [2, 4, 5], [3, 0, 4]];
+  const pos = []; faces.forEach(f => f.forEach(i => pos.push(...v[i])));
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
+  mesh(g, M.roof, house);
+  mesh(new THREE.BoxGeometry(2 * x0 + 0.1, 0.22, 0.08), M.fascia, house, 0, H - 0.05, z0);
+  mesh(new THREE.BoxGeometry(0.08, 0.22, 2 * z0 + 0.1), M.fascia, house, x0, H - 0.05, 0);
+  mesh(new THREE.BoxGeometry(2 * x0, 0.06, 2 * z0), M.fascia, house, 0, H - 0.14, 0);
+  // gutter
+  const gut = new THREE.CylinderGeometry(0.1, 0.1, 2 * x0, 16, 1, true, 0, PI).rotateZ(PI / 2);
+  mesh(gut, M.gutter, house, 0, H - 0.1, z0 + 0.1);
+  // chimney
+  mesh(new THREE.BoxGeometry(0.7, 2.2, 0.7), new THREE.MeshStandardMaterial({ color: 0x9a5b45, roughness: 0.9 }), house, 2.2, H + 2.2, -1.2);
+}
+// interior darkness (behind windows)
+mesh(new THREE.BoxGeometry(W - 0.8, H - 0.1, D - 0.8), new THREE.MeshStandardMaterial({ color: 0x3d3a36, roughness: 1, side: THREE.BackSide }), house, 0, H / 2, 0).castShadow = false;
+
+/* ================= WALLS (front + side, with openings) ================= */
+const removable = [];   // old sills + downpipe
+const finals = [];      // new sills + downpipe
+WALLS.forEach(w => {
+  const s = rectShape(w.u0, w.u1, 0, H, w.openings);
+  const geo = new THREE.ExtrudeGeometry(s, { depth: 0.35, bevelEnabled: false }); geo.translate(0, 0, -0.35);
+  mesh(geo, M.wall, w.g);
+  // plinth band
+  mesh(new THREE.BoxGeometry(w.u1 - w.u0 + 0.06, BASE, 0.06), M.plinth, w.g, (w.u0 + w.u1) / 2, BASE / 2, 0.03);
+  w.openings.forEach(o => {
+    const cx = (o.u0 + o.u1) / 2, cy = (o.v0 + o.v1) / 2, ow = o.u1 - o.u0, oh = o.v1 - o.v0, z = -0.12;
+    if (o.door) {
+      mesh(new THREE.BoxGeometry(ow, oh, 0.06), M.door, w.g, cx, cy, z);
+      mesh(new THREE.BoxGeometry(0.05, 0.3, 0.06), M.metal, w.g, cx + ow * 0.35, 1.05, z + 0.06);
+      return;
+    }
+    const fr = 0.07;
+    [[ow, fr, cx, o.v1 - fr / 2], [ow, fr, cx, o.v0 + fr / 2], [fr, oh, o.u0 + fr / 2, cy], [fr, oh, o.u1 - fr / 2, cy], [fr * .8, oh, cx, cy]].forEach(([a, b, x, y]) => mesh(new THREE.BoxGeometry(a, b, 0.09), M.frame, w.g, x, y, z));
+    mesh(new THREE.PlaneGeometry(ow - 0.1, oh - 0.1), M.glass, w.g, cx, cy, z - 0.02);
+    // old sill / new sill
+    removable.push(mesh(new THREE.BoxGeometry(ow + 0.1, 0.04, 0.16), M.metal, w.g, cx, o.v0 - 0.02, 0.06));
+    const ns = mesh(new THREE.BoxGeometry(ow + 0.12, 0.035, T + 0.24), M.metal, w.g, cx, o.v0 - 0.02, (T + 0.24) / 2 - 0.04);
+    ns.rotation.x = 0.06; finals.push(ns);
+  });
+});
+// downpipe (removed and refitted)
+{
+  const wf = WALLS[0];
+  const pipe = new THREE.Group(); wf.g.add(pipe);
+  mesh(new THREE.CylinderGeometry(0.06, 0.06, H - 0.3, 14), M.gutter, pipe, 4.6, H / 2, 0.14);
+  removable.push(pipe);
+  const pipe2 = new THREE.Group(); wf.g.add(pipe2);
+  mesh(new THREE.CylinderGeometry(0.06, 0.06, H - 0.3, 14), M.gutter, pipe2, 4.6, H / 2, T + 0.16);
+  for (let i = 0; i < 3; i++) mesh(new THREE.BoxGeometry(0.03, 0.03, 0.2), M.gutter, pipe2, 4.6, 1 + i * 2, T + 0.06);
+  finals.push(pipe2);
+}
+
+/* ================= INSULATION ================= */
+function subtract(r, o) {
+  if (o.u1 <= r.u0 || o.u0 >= r.u1 || o.v1 <= r.v0 || o.v0 >= r.v1) return [r];
+  const out = [];
+  if (o.u0 > r.u0) out.push({ u0: r.u0, u1: o.u0, v0: r.v0, v1: r.v1 });
+  if (o.u1 < r.u1) out.push({ u0: o.u1, u1: r.u1, v0: r.v0, v1: r.v1 });
+  const a = Math.max(r.u0, o.u0), b = Math.min(r.u1, o.u1);
+  if (o.v0 > r.v0) out.push({ u0: a, u1: b, v0: r.v0, v1: o.v0 });
+  if (o.v1 < r.v1) out.push({ u0: a, u1: b, v0: o.v1, v1: r.v1 });
+  return out;
+}
+const boards = [], dowels = [];
+const BW = 1.0, BH = 0.5;
+WALLS.forEach((w, wi) => {
+  const U0 = w.u0, U1 = w.id === 'front' ? w.u1 + T : w.u1; // front boards wrap the corner
+  w.regionU0 = w.id === 'side' ? w.u0 - T : w.u0; w.regionU1 = U1;
+  const rows = Math.ceil((H - BASE) / BH);
+  for (let r = 0; r < rows; r++) {
+    const v0 = BASE + r * BH, v1 = Math.min(H, v0 + BH);
+    const off = (r % 2) * BW / 2;
+    for (let u = U0 - off, c = 0; u < U1; u += BW, c++) {
+      let pieces = [{ u0: Math.max(U0, u), u1: Math.min(U1, u + BW), v0, v1 }];
+      w.openings.forEach(o => { pieces = pieces.flatMap(p => subtract(p, o)); });
+      pieces.filter(p => p.u1 - p.u0 > 0.04 && p.v1 - p.v0 > 0.04).forEach(p => {
+        const bw = p.u1 - p.u0, bh = p.v1 - p.v0;
+        const pivot = new THREE.Group(); w.g.add(pivot);
+        pivot.position.set((p.u0 + p.u1) / 2, (p.v0 + p.v1) / 2, T / 2);
+        const m = mesh(new THREE.BoxGeometry(bw - 0.006, bh - 0.006, T), M.eps, pivot);
+        const order = r * 1.0 + ((p.u0 - w.u0) / (U1 - w.u0)) * 0.9;
+        boards.push({ pivot, order, home: pivot.position.clone() });
+        // dowels: boards at the building corner (h ≤ 12 m) — 2 per board, ~20 cm from edge
+        const atCorner = (w.id === 'front' && p.u1 > w.u1 - 0.01) || (w.id === 'side' && p.u0 < w.u0 + 0.01) || (w.id === 'front' && p.u0 < w.u0 + 0.01);
+        if (atCorner && bw > 0.35) {
+          const edgeU = (w.id === 'front' && p.u1 > w.u1 - 0.01) ? p.u1 - 0.2 - T : (p.u0 + 0.2);
+          [p.v0 + bh * 0.3, p.v0 + bh * 0.7].forEach(v => {
+            const d = new THREE.Group(); w.g.add(d); d.position.set(edgeU, v, T);
+            mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.006, 20).rotateX(PI / 2), M.dowel, d);
+            mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.007, 10).rotateX(PI / 2), M.plinth, d, 0, 0, 0.0005);
+            d.scale.setScalar(0.001);
+            dowels.push({ d, order: dowels.length });
+          });
+        }
+      });
+    }
+  }
+  // coats (with openings) — primer on masonry, reinforcement and plaster on boards
+  const coat = (u0, u1, v0, z, mat) => { const g = new THREE.ShapeGeometry(rectShape(u0, u1, v0, H, w.openings)); const m = mesh(g, mat, w.g, 0, 0, z); m.castShadow = false; return m; };
+  coat(w.u0, w.u1, 0.0, 0.004, coatMat.primer);
+  coat(w.regionU0, w.regionU1, BASE, T + 0.006, coatMat.reinf);
+  w.plaster = coat(w.regionU0, w.regionU1, BASE, T + 0.012, coatMat.plaster);
+  // thermal overlays
+  w.thB = new THREE.MeshBasicMaterial({ map: thermalTex(w, true), transparent: true, opacity: 0, depthWrite: false, toneMapped: false });
+  w.thA = new THREE.MeshBasicMaterial({ map: thermalTex(w, false), transparent: true, opacity: 0, depthWrite: false, toneMapped: false });
+  const thB = mesh(new THREE.ShapeGeometry(rectShape(w.u0, w.u1, 0, H, w.openings)), w.thB, w.g, 0, 0, 0.02); thB.castShadow = false; thB.renderOrder = 5;
+  const thA = mesh(new THREE.ShapeGeometry(rectShape(w.regionU0, w.regionU1, 0, H, w.openings)), w.thA, w.g, 0, 0, T + 0.03); thA.castShadow = false; thA.renderOrder = 5;
+  // window glow (thermal)
+  w.glow = new THREE.MeshBasicMaterial({ color: 0xffc04a, transparent: true, opacity: 0, depthWrite: false, toneMapped: false });
+  w.openings.forEach(o => { const m = mesh(new THREE.PlaneGeometry(o.u1 - o.u0, o.v1 - o.v0), w.glow, w.g, (o.u0 + o.u1) / 2, (o.v0 + o.v1) / 2, -0.05); m.castShadow = false; m.renderOrder = 6; });
+  // mesh strips at opening corners (20 × 40 cm, diagonal)
+  w.strips = [];
+  w.openings.forEach(o => {
+    const corners = o.door ? [[o.u0, o.v1, 1, 1], [o.u1, o.v1, -1, 1]] : [[o.u0, o.v1, 1, 1], [o.u1, o.v1, -1, 1], [o.u0, o.v0, 1, -1], [o.u1, o.v0, -1, -1]];
+    corners.forEach(([u, v, su, sv]) => {
+      const m = mesh(new THREE.PlaneGeometry(0.4, 0.2), M.strip, w.g, u - su * 0.17, v + sv * 0.17, T + 0.003);
+      m.rotation.z = su * sv > 0 ? -PI / 4 : PI / 4; m.castShadow = false; m.scale.setScalar(0.001); w.strips.push(m);
+    });
+  });
+  // window/door reveals: EPS first, then plaster
+  w.revEps = new THREE.Group(); w.revPl = new THREE.Group(); w.g.add(w.revEps, w.revPl);
+  w.openings.forEach(o => {
+    const dz = T + 0.12, zc = T / 2 - 0.06, cx = (o.u0 + o.u1) / 2, cy = (o.v0 + o.v1) / 2;
+    const parts = [[0.03, o.v1 - o.v0, dz, o.u0 + 0.015, cy], [0.03, o.v1 - o.v0, dz, o.u1 - 0.015, cy], [o.u1 - o.u0, 0.03, dz, cx, o.v1 - 0.015]];
+    parts.forEach(([a, b, c, x, y]) => { mesh(new THREE.BoxGeometry(a, b, c), epsFront, w.revEps, x, y, zc); mesh(new THREE.BoxGeometry(a + 0.004, b + 0.004, c + 0.01), revealPl, w.revPl, x, y, zc + 0.005); });
+  });
+  // starter profile
+  w.starter = mesh(new THREE.BoxGeometry(w.regionU1 - w.regionU0, 0.03, T + 0.02), M.metal, w.g, (w.regionU0 + w.regionU1) / 2, BASE - 0.015, T / 2 + 0.01);
+});
+const maxOrder = Math.max(...boards.map(b => b.order));
+
+// pull-off test blocks (10 × 10 cm) — front wall
+const pulls = [[-1.4, 1.2], [1.9, 3.0], [-4.3, 4.5], [3.0, 1.0]].map(([u, v]) => {
+  const g = new THREE.Group(); WALLS[0].g.add(g); g.position.set(u, v, 0.05);
+  const blk = mesh(new THREE.BoxGeometry(0.22, 0.22, 0.1), M.pull, g);
+  const res = mesh(new THREE.BoxGeometry(0.2, 0.2, 0.012), M.pull, g, 0, 0, -0.045); // foam stays on wall = pass
+  res.visible = false; return { g, blk, res };
+});
+
+// scaffolding
+const scaff = new THREE.Group(); house.add(scaff);
+{
+  const tube = (len, axis) => { const g = new THREE.CylinderGeometry(0.028, 0.028, len, 8); if (axis === 'x') g.rotateZ(PI / 2); if (axis === 'z') g.rotateX(PI / 2); return g; };
+  const off = 1.1, inner = 0.55;
+  for (const x of [-5, -2.5, 0, 2.5, 5]) for (const dz of [off]) mesh(tube(H + 0.8, 'y'), M.scaff, scaff, x, (H + 0.8) / 2, D / 2 + dz);
+  for (const z of [4, 1.3, -1.3, -4]) for (const dx of [off]) mesh(tube(H + 0.8, 'y'), M.scaff, scaff, W / 2 + dx, (H + 0.8) / 2, z);
+  for (const y of [2.0, 4.0, H + 0.5]) {
+    for (const dz of [off]) mesh(tube(W + 2.2, 'x'), M.scaff, scaff, 0.6, y, D / 2 + dz);
+    for (const dx of [off]) mesh(tube(D + 2.2, 'z'), M.scaff, scaff, W / 2 + dx, y, -0.6);
+  }
+  for (const y of [2.0, 4.0]) {
+    mesh(new THREE.BoxGeometry(W + 1.6, 0.05, off - inner + 0.1), M.plank, scaff, 0.6, y + 0.04, D / 2 + (off + inner) / 2);
+    mesh(new THREE.BoxGeometry(off - inner + 0.1, 0.05, D + 1.6), M.plank, scaff, W / 2 + (off + inner) / 2, y + 0.04, -0.6);
+  }
+}
+
+// tool (float / roller) that rides the sweep line
+const tool = new THREE.Group(); scene.add(tool);
+{
+  mesh(new THREE.BoxGeometry(0.5, 0.06, 0.03), new THREE.MeshStandardMaterial({ color: 0xd8dde2, metalness: 0.8, roughness: 0.3 }), tool);
+  mesh(new THREE.BoxGeometry(0.12, 0.05, 0.12), new THREE.MeshStandardMaterial({ color: 0xe46f1f, roughness: 0.5 }), tool, 0, 0, 0.08);
+}
+tool.visible = false;
+
+/* ================= UI: steps, cross-section, swatches ================= */
+const STEPS = [
+  { t: 3.0, k: 'PRZED', title: 'Nieocieplona ściana traci ciepło', d: 'Na termogramie (ilustracja) widać ucieczkę ciepła przez mur, nadproża i wieniec stropu, czyli mostki termiczne.', layer: -1 },
+  { t: 6.0, k: 'ETAP 1', title: 'Przygotowanie', d: 'Ustawiamy rusztowanie, zdejmujemy obróbki blacharskie, rynny i instalacje z elewacji.', layer: 0 },
+  { t: 8.0, k: 'ETAP 2', title: 'Ocena i gruntowanie podłoża', d: 'Podłoże musi być nośne, suche, czyste i niezamrożone. Chłonne powierzchnie gruntujemy preparatem głęboko penetrującym.', layer: 1 },
+  { t: 11.0, k: 'ETAP 3', title: 'Próba odrywania', d: 'Klejemy kostki styropianu 10 × 10 cm i po 5 dniach je odrywamy. Jeśli pęka styropian, a nie spoina, podłoże jest dobre.', layer: 1 },
+  { t: 14.0, k: 'ETAP 4', title: 'Wyrównanie i listwa startowa', d: 'Nierówności do 1 cm wyrównuje sam klej, większe wymagają zaprawy. Listwa startowa wyznacza poziom pierwszego rzędu płyt.', layer: 2 },
+  { t: 15.5, k: 'ETAP 5', title: 'Klejenie płyt', d: 'Klej nakładamy metodą obwodowo-punktową: obwód min. 3 cm i placki ok. 10 cm. Spoiny pionowe przesuwamy co najmniej o 15 cm, a szczeliny wypełniamy pianką niskoprężną.', layer: 3 },
+  { t: 24.0, k: 'ETAP 6', title: 'Kołkowanie', d: 'Po 2–3 dniach od klejenia. W budynkach do 12 m kołkujemy tylko narożniki: 2 łączniki na płytę, ok. 20 cm od krawędzi. Każdy musi wytrzymać min. 0,2 kN.', layer: 4 },
+  { t: 26.5, k: 'ETAP 7', title: 'Warstwa zbrojona', d: 'Przy narożnikach otworów dajemy ukośne pasy siatki 20 × 40 cm. Siatkę z włókna szklanego zatapiamy w 2–3 mm kleju z zakładem min. 10 cm. Łącznie 3–5 mm.', layer: 5 },
+  { t: 30.5, k: 'ETAP 8', title: 'Grunt i tynk', d: 'Po min. 24 h od gruntowania nakładamy tynk: akrylowy, mineralny, silikatowy lub silikonowy, w fakturze baranek albo kornik. Kolor barwimy na miejscu.', layer: 6 },
+  { t: 33.5, k: 'GOTOWE', title: 'Montaż obróbek i rynien', d: 'Rusztowanie schodzi, a nowe, dłuższe parapety i rury spustowe wracają na swoje miejsce.', layer: 7 },
+  { t: 35.5, k: 'PO', title: 'Ciepło zostaje w domu', d: 'Po ociepleniu ściany są równomiernie „zimne” na termogramie (ilustracja). Najsłabszym miejscem zostają okna.', layer: 7 },
+];
+const L = 42;
+const stepsEl = document.getElementById('steps');
+const LIST = STEPS.filter(s => s.k.startsWith('ETAP'));
+LIST.forEach((s, i) => { const li = document.createElement('li'); li.innerHTML = `<span class="n">${i + 1}</span><span>${s.title}</span>`; li.onclick = () => { TT = s.t + 0.01; }; stepsEl.appendChild(li); });
+
+// cross-section svg
+const LAYERS = [
+  { n: 'Mur', w: 70, c: '#c9c2b6' }, { n: 'Grunt', w: 8, c: '#9fb2c6' }, { n: 'Klej', w: 12, c: '#a39f97' },
+  { n: 'Styropian / wełna', w: 92, c: '#f4f4ef' }, { n: 'Łącznik', w: 0, c: '#ffffff' },
+  { n: 'Zbrojenie', w: 14, c: '#cfccc5' }, { n: 'Tynk', w: 12, c: '#e8dcc4' },
+];
+const xs = document.getElementById('xs');
+function drawXS(active, plasterHex) {
+  let x = 14, out = '';
+  LAYERS.forEach((l, i) => {
+    const on = i <= active, cur = i === active || (active === 3 && i === 2);
+    if (l.w) {
+      const col = i === 6 ? plasterHex : l.c;
+      out += `<rect x="${x}" y="22" width="${l.w}" height="86" fill="${on ? col : '#f3f1ec'}" stroke="${on ? '#bdb7ad' : '#e6e2db'}" stroke-dasharray="${on ? '' : '3 3'}"/>`;
+      if (i === 5 && on) for (let y = 26; y < 108; y += 8) out += `<line x1="${x + 5}" y1="${y}" x2="${x + 9}" y2="${y}" stroke="#e8b23a" stroke-width="2"/>`;
+      if (i === 3 && on) for (let k = 0; k < 40; k++) out += `<circle cx="${x + 4 + (k * 37) % (l.w - 8)}" cy="${26 + (k * 53) % 78}" r="1.6" fill="none" stroke="#c9c9c0"/>`;
+    }
+    if (i === 4 && active >= 4) out += `<g><rect x="${14 + 70 + 8 + 12 - 34}" y="60" width="${34 + 92 + 2}" height="5" fill="#fff" stroke="#9a968e"/><rect x="${14 + 70 + 8 + 12 + 92}" y="52" width="4" height="21" rx="1.5" fill="#fff" stroke="#9a968e"/></g>`;
+    const lx = l.w ? x + l.w / 2 : 14 + 70 + 8 + 12 + 92;
+    const row = i % 2 ? 128 : 140;
+    if (cur || (active === 4 && i === 4)) out += `<line x1="${lx}" y1="108" x2="${lx}" y2="${row - 10}" stroke="#e46f1f"/><text x="${clamp(lx, 40, 260)}" y="${row}" text-anchor="middle" font-size="11" font-weight="700" fill="#e46f1f" font-family="Inter">${l.n}</text>`;
+    x += l.w;
+  });
+  out += `<text x="14" y="14" font-size="10" fill="#8a8f94" font-family="Inter">wewnątrz</text><text x="${x}" y="14" text-anchor="end" font-size="10" fill="#8a8f94" font-family="Inter">na zewnątrz</text>`;
+  xs.innerHTML = out;
+}
+// swatches
+const COLORS = [['Piaskowy', '#e8dcc4'], ['Biały', '#f2f0ea'], ['Szałwia', '#c7d1bd'], ['Jasnoszary', '#c9cbcc'], ['Grafit', '#5f6368'], ['Terakota', '#d49a79']];
+let plasterHex = COLORS[0][1];
+const sw = document.getElementById('sw');
+COLORS.forEach(([n, c], i) => {
+  const b = document.createElement('button'); b.style.background = c; b.title = n; if (!i) b.className = 'on';
+  b.onclick = () => { plasterHex = c; coatMat.plaster.color.set(c); revealPl.color.set(c); sw.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); lastXS = ''; };
+  sw.appendChild(b);
+});
+document.querySelectorAll('#tex button').forEach(b => b.onclick = () => {
+  const t = PLASTER[b.dataset.t]; coatMat.plaster.map = t; coatMat.plaster.bumpMap = t; coatMat.plaster.needsUpdate = true; revealPl.map = t; revealPl.needsUpdate = true;
+  document.querySelectorAll('#tex button').forEach(x => x.classList.toggle('on', x === b));
+});
+
+/* ================= TIMELINE ================= */
+const CAM = [ // t, rotY, dist, targetY, height
+  [0, 0.62, 30, 3.2, 9], [6, 0.55, 29, 3.2, 9], [11, 0.25, 21, 2.6, 6], [14, 0.35, 22, 2.4, 6], [15.5, 0.55, 27, 3.2, 8],
+  [24, 0.78, 19, 3.0, 6], [26.5, 0.45, 22, 3.2, 7], [30.5, 0.5, 26, 3.4, 8], [35.5, 0.62, 29, 3.4, 9], [42, 0.62, 30, 3.2, 9],
+];
+function camAt(t) { for (let i = 0; i < CAM.length - 1; i++) { const a = CAM[i], b = CAM[i + 1]; if (t <= b[0]) { const k = ease((t - a[0]) / (b[0] - a[0])); return a.map((v, j) => v + (b[j] - v) * k); } } return CAM[CAM.length - 1]; }
+const capk = document.getElementById('capk'), capt = document.getElementById('capt'), capd = document.getElementById('capd'), legend = document.getElementById('legend');
+let lastStep = null, lastXS = '';
+const _v = new THREE.Vector3();
+
+function apply(t) {
+  const [, ry, dist, ty, cy] = camAt(t);
+  house.rotation.y = -ry;
+  controls.target.set(0, ty, 0);
+  const dir = camera.position.clone().sub(controls.target); dir.y = 0; dir.normalize();
+  const asp = Math.max(1, 1.35 / camera.aspect);
+  camera.position.set(dir.x * dist * userZoom * asp, cy * (0.6 + 0.4 * userZoom), dir.z * dist * userZoom * asp);
+
+  // thermal before / after
+  const thB = ramp(t, 3, 3.6) * (1 - ramp(t, 5.4, 6));
+  const thA = ramp(t, 35.5, 36.3) * (1 - ramp(t, 40.3, 41.5));
+  WALLS.forEach(w => { w.thB.opacity = thB * 0.92; w.thA.opacity = thA * 0.92; w.glow.opacity = Math.max(thB, thA) * 0.85; });
+  legend.style.display = Math.max(thB, thA) > 0.2 ? 'flex' : 'none';
+
+  // scaffolding
+  const sc = ramp(t, 6, 7.6) * (1 - ramp(t, 33.5, 35));
+  scaff.scale.y = Math.max(0.001, sc); scaff.visible = sc > 0.01;
+  // removed items (old sills, downpipe) and new ones
+  const rem = ramp(t, 6.8, 7.8);
+  removable.forEach(m => { m.visible = rem < 0.99; m.position.y = (m.userData.y0 ??= m.position.y) + rem * 0.4; m.scale.setScalar(1 - rem * 0.999); });
+  const fin = ramp(t, 34, 35);
+  finals.forEach(m => { m.visible = fin > 0.01; m.scale.setScalar(Math.max(0.001, fin)); });
+
+  // primer sweep
+  const yP = H + 0.3 - (H + 0.6) * lin(t, 8.3, 10.8);
+  sweep.primer.constant = -yP;
+  WALLS.forEach(w => { w.revEps.visible = t > 21 && t < 33.5; w.revPl.visible = t >= 33.4; });
+  // pull test
+  pulls.forEach((p, i) => {
+    const a = ramp(t, 11.2 + i * 0.15, 11.6 + i * 0.15), tear = ramp(t, 12.8 + i * 0.12, 13.4 + i * 0.12);
+    p.g.visible = t > 11.1 && t < 22;
+    p.blk.scale.setScalar(Math.max(0.001, a)); p.blk.position.z = tear * 1.2; p.blk.rotation.x = tear * 0.9;
+    p.blk.visible = tear < 0.98; p.res.visible = tear > 0.05;
+  });
+  // starter profile
+  const sp = ramp(t, 14.2, 15.3);
+  WALLS.forEach(w => { w.starter.scale.x = Math.max(0.001, sp); w.starter.visible = sp > 0.01; });
+  // boards
+  boards.forEach(b => {
+    const st = 15.6 + b.order / maxOrder * 7.6, k = clamp((t - st) / 0.55);
+    b.pivot.visible = k > 0;
+    if (k <= 0) return;
+    const e = easeOutBack(k);
+    b.pivot.position.set(b.home.x, b.home.y + (1 - e) * 0.6, b.home.z + (1 - ease(k)) * 2.2);
+    b.pivot.rotation.y = (1 - ease(clamp(k * 1.25))) * PI; // shows glue pattern, then flips onto the wall
+  });
+  // dowels
+  dowels.forEach(d => { const k = clamp((t - 24.2 - d.order / dowels.length * 1.8) / 0.25); d.d.scale.setScalar(Math.max(0.001, easeOutBack(k))); });
+  // mesh strips + reinforcement sweep
+  WALLS.forEach(w => w.strips.forEach((s, i) => s.scale.setScalar(Math.max(0.001, ramp(t, 26.6 + i * 0.03, 27.0 + i * 0.03)))));
+  const yR = H + 0.3 - (H + 0.6) * lin(t, 27.4, 30.2);
+  sweep.reinf.constant = -yR;
+  // plaster sweep
+  const yT = H + 0.3 - (H + 0.6) * lin(t, 30.8, 33.4);
+  sweep.plaster.constant = -yT;
+  // tool follows active sweep
+  let ty2 = null;
+  if (t > 8.3 && t < 10.8) ty2 = yP; else if (t > 27.4 && t < 30.2) ty2 = yR; else if (t > 30.8 && t < 33.4) ty2 = yT;
+  tool.visible = ty2 != null && ty2 > BASE && ty2 < H;
+  if (tool.visible) {
+    const wf = WALLS[0], zz = t < 11 ? 0.06 : T + 0.05;
+    _v.set(Math.sin(t * 5) * 3.6, ty2, zz); wf.g.localToWorld(_v); tool.position.copy(_v); tool.quaternion.copy(house.quaternion); tool.rotation.z = 0;
+  }
+  // captions
+  let s = null; for (const q of STEPS) if (t >= q.t) s = q;
+  if (!s) s = { k: 'START', title: 'Dom przed ociepleniem', d: 'Ściany z bloczków, bez izolacji. Zobacz, jak wygląda ocieplenie metodą lekką-mokrą (ETICS), krok po kroku.', layer: -1 };
+  if (s !== lastStep) {
+    lastStep = s; capk.textContent = s.k; capt.textContent = s.title; capd.textContent = s.d;
+    const idx = LIST.indexOf(s), cur = idx >= 0 ? idx : (s.k === 'GOTOWE' || s.k === 'PO' ? 99 : -1);
+    [...stepsEl.children].forEach((li, i) => { li.classList.toggle('cur', i === idx); li.classList.toggle('done', i < cur && i !== idx); });
+  }
+  const layer = s.layer, key = layer + plasterHex;
+  if (key !== lastXS) { lastXS = key; drawXS(layer, plasterHex); }
+}
+
+/* ================= LOOP & UI ================= */
+let playing = true, speed = 1, TT = 0, scrubbing = false;
+const scrub = document.getElementById('scrub'), playBtn = document.getElementById('play');
+playBtn.onclick = () => { playing = !playing; playBtn.textContent = playing ? '❚❚' : '▶'; playBtn.classList.toggle('on', playing); };
+scrub.addEventListener('input', () => { TT = scrub.value / 1000 * L; scrubbing = true; });
+scrub.addEventListener('change', () => { scrubbing = false; });
+document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { speed = +b.dataset.s; document.querySelectorAll('[data-s]').forEach(x => x.classList.toggle('on', x === b)); });
+const qp = new URLSearchParams(location.search); if (qp.has('t')) { TT = +qp.get('t'); playing = false; }
+resize();
+let last = performance.now();
+function tick(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (playing && !scrubbing) TT = (TT + dt * speed) % L;
+  if (!scrubbing) scrub.value = Math.round(TT / L * 1000);
+  controls.update(); apply(TT);
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+window.__ready = true;
+</script>
+</body>
+</html>

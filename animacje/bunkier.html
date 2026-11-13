@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jak powstaje dom bunkier – interaktywna animacja budowy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;700&family=Montserrat:wght@600;800&display=swap" rel="stylesheet">
+<style>
+:root{--accent:#ad6d2f;--accent-d:#8f5622;--ink:#181818;--text:#464646;--muted:#999;--line:#ececec;--cream:#fdf5ee;--gray:#eaeaea}
+*{box-sizing:border-box}
+html,body{margin:0;background:#fff;color:var(--ink);font-family:Rubik,system-ui,sans-serif;font-size:16px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1320px;margin:0 auto;padding:0 32px}
+header.top{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.96);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+header.top .wrap{height:72px;display:flex;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:baseline;gap:12px}
+.brand b{font-weight:700;font-size:26px;letter-spacing:-.04em;color:#111}
+.brand span{font:800 11px Montserrat,sans-serif;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+.hdr-stage{font-size:14px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;color:#000}
+.hdr-stage b{color:var(--accent)}
+.hero{position:relative;background:#e7e7e7;overflow:hidden}
+.hero .bg{position:absolute;inset:0 0 0 38%;background-size:420px;opacity:.95;-webkit-mask-image:linear-gradient(90deg,transparent,#000 45%);mask-image:linear-gradient(90deg,transparent,#000 45%)}
+.hero .wrap{position:relative;padding-top:44px;padding-bottom:48px}
+.crumbs{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#222}
+.crumbs i{font-style:normal;color:#888;margin:0 6px}
+.crumbs .cur{color:#666}
+h1{font-weight:300;font-size:clamp(34px,4.2vw,56px);line-height:1.12;margin:18px 0 14px;max-width:720px;letter-spacing:-.01em}
+.lead{max-width:600px;color:#333;line-height:1.6;margin:0}
+.eyebrow{display:flex;align-items:center;gap:10px;font:800 11px Montserrat,sans-serif;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+.eyebrow:before{content:"";width:28px;height:2px;background:var(--accent)}
+.stage-grid{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:28px;margin-top:40px;align-items:start}
+.viewer-card{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff}
+.viewer{position:relative;height:min(70vh,680px);min-height:420px;background:#e9e7e3}
+.viewer canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+.viewer canvas.pointer{cursor:pointer}
+.badge{position:absolute;top:16px;left:16px;background:#fff;border-radius:10px;padding:10px 14px;box-shadow:0 4px 18px rgba(0,0,0,.06);font:800 11px Montserrat,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.badge small{display:block;font:400 13px Rubik,sans-serif;letter-spacing:0;text-transform:none;color:var(--ink);margin-top:3px}
+.cutflag{position:absolute;top:16px;right:16px;background:var(--accent);color:#fff;border-radius:8px;padding:7px 11px;font:800 10px Montserrat,sans-serif;letter-spacing:.16em;display:none}
+.hint{position:absolute;left:16px;bottom:14px;background:rgba(255,255,255,.88);border-radius:999px;padding:7px 14px;font-size:12px;color:#555}
+.tip{position:absolute;pointer-events:none;background:#181818;color:#fff;font-size:12.5px;padding:6px 10px;border-radius:6px;transform:translate(12px,12px);white-space:nowrap;display:none;z-index:3}
+.loader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#e9e7e3;font:800 11px Montserrat,sans-serif;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;transition:opacity .5s}
+.ctrl{display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid var(--line);flex-wrap:wrap}
+.ib{width:42px;height:42px;border-radius:10px;border:1px solid var(--line);background:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink);transition:.15s}
+.ib:hover{border-color:var(--accent);color:var(--accent)}
+.ib.play{background:var(--accent);border-color:var(--accent);color:#fff}
+.ib.play:hover{background:var(--accent-d);color:#fff}
+.ib svg{width:18px;height:18px}
+.scrub{flex:1;min-width:140px;accent-color:var(--accent);height:4px}
+.tbtn{font:800 11px Montserrat,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);background:var(--cream);border:1px solid transparent;border-radius:10px;padding:0 14px;height:42px;cursor:pointer}
+.tbtn.on{background:var(--accent);color:#fff}
+.tbtn:hover{border-color:var(--accent)}
+.panel{position:sticky;top:96px;border:1px solid var(--line);border-radius:14px;padding:28px 28px 24px;background:#fff}
+.panel h2{font:800 25px/1.25 Montserrat,sans-serif;color:#111;margin:14px 0 12px;letter-spacing:-.01em}
+.panel p{color:var(--text);line-height:1.62;margin:0;font-size:15.5px}
+.mini{font:800 10.5px Montserrat,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#999;margin:22px 0 10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid #f1e3d5;background:var(--cream);color:#6c4219;border-radius:8px;padding:7px 11px;font-size:13px;cursor:pointer;font-family:inherit;transition:.15s}
+.chip:hover,.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.sel{margin-top:20px;border:1px solid var(--line);border-radius:12px;padding:16px;display:none;gap:14px;animation:fade .25s}
+.sel.show{display:flex}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+.ico{flex:none;width:44px;height:44px;border-radius:10px;background:var(--cream);display:flex;align-items:center;justify-content:center;color:var(--accent)}
+.ico svg{width:22px;height:22px}
+.sel h3{margin:0 0 4px;font-size:16px;font-weight:500}
+.sel .st{font-size:12px;color:#999;margin-bottom:6px}
+.sel p{font-size:14px}
+.link{display:inline-block;margin-top:10px;font:800 11px Montserrat,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);background:none;border:0;padding:0;cursor:pointer}
+.link:hover{color:var(--accent-d)}
+.x{margin-left:auto;align-self:flex-start;background:none;border:0;color:#aaa;cursor:pointer;font-size:18px;line-height:1}
+.done{margin-top:20px;background:var(--cream);border-radius:12px;padding:16px;display:none;gap:14px;align-items:center}
+.done.show{display:flex}
+.done .ico{background:var(--accent);color:#fff}
+.done b{display:block;font-weight:500}
+.done span{font-size:14px;color:var(--text)}
+.timeline{margin-top:28px}
+.tl{position:relative;display:grid;grid-template-columns:repeat(13,minmax(78px,1fr));gap:0;overflow-x:auto;padding:4px 0 10px}
+.tl .rail{position:absolute;left:39px;right:39px;top:18px;height:2px;background:#e3e3e3}
+.tl .fill{position:absolute;left:39px;top:18px;height:2px;background:var(--accent);width:0}
+.step{position:relative;background:none;border:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;padding:0 4px;font-family:inherit}
+.step .n{width:30px;height:30px;border-radius:50%;background:#fff;border:1.5px solid #d6d6d6;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:500;color:#777;transition:.2s;position:relative;z-index:1}
+.step .l{font-size:12.5px;color:#666;text-align:center;line-height:1.25}
+.step.past .n{border-color:var(--accent);color:var(--accent)}
+.step.cur .n{background:var(--accent);border-color:var(--accent);color:#fff;transform:scale(1.12)}
+.step.cur .l{color:#111;font-weight:500}
+.step:hover .n{border-color:var(--accent)}
+.phases{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin:56px auto 72px}
+.ph{border:1px solid var(--line);border-radius:14px;padding:24px;background:#fff;cursor:pointer;transition:.2s;text-align:left;font-family:inherit;color:inherit}
+.ph:hover{border-color:#e2c9b0}
+.ph.on{border-color:var(--accent);box-shadow:0 8px 28px rgba(173,109,47,.10)}
+.ph h3{font-weight:500;font-size:18px;line-height:1.35;margin:16px 0 8px;color:#111}
+.ph p{font-size:14.5px;color:var(--text);line-height:1.6;margin:0}
+.ph .link{margin-top:14px}
+footer{background:var(--gray);padding:28px 0;font-size:13px;color:#666}
+@media (max-width:1040px){.stage-grid{grid-template-columns:1fr}.panel{position:static}.phases{grid-template-columns:1fr}}
+@media (max-width:640px){.wrap{padding:0 18px}.viewer{height:58vh;min-height:360px}.hint{display:none}h1{margin-top:12px}.hdr-stage{font-size:12px}.brand span{display:none}}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <div class="brand"><b>dom bunkier</b><span>animacja budowy</span></div>
+  <div class="hdr-stage">Etap <b id="hdrN">01</b> / 13</div>
+</div></header>
+
+<section class="hero"><div class="bg" id="heroBg"></div><div class="wrap">
+  <div class="crumbs">Oferta <i>/</i> Dom bunkier <i>/</i> <span class="cur">Jak powstaje</span></div>
+  <h1>Jak powstaje dom bunkier – od projektu do kluczy</h1>
+  <p class="lead">Masywna, częściowo wtopiona w teren bryła z żelbetu, ukryte ocieplenie i elewacja z betonu architektonicznego. Odtwórz budowę etap po etapie i kliknij dowolny element, aby poznać jego rolę.</p>
+</div></section>
+
+<main class="wrap">
+  <div class="stage-grid">
+    <div class="viewer-card">
+      <div class="viewer" id="viewer">
+        <canvas id="c"></canvas>
+        <div class="badge" id="badge">Etap projektowy<small>Projekt i wytyczenie</small></div>
+        <div class="cutflag" id="cutflag">PRZEKRÓJ</div>
+        <div class="hint">Kliknij element, aby zobaczyć opis · przeciągnij, aby obracać · kółko – przybliżenie</div>
+        <div class="tip" id="tip"></div>
+        <div class="loader" id="loader">Wylewamy fundamenty…</div>
+      </div>
+      <div class="ctrl">
+        <button class="ib" id="prev" title="Poprzedni etap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <button class="ib play" id="play" title="Odtwórz / pauza"></button>
+        <button class="ib" id="next" title="Następny etap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></button>
+        <input type="range" class="scrub" id="scrub" min="0" max="13" step="0.001" value="0" aria-label="Postęp budowy">
+        <button class="tbtn" id="cut">Przekrój</button>
+        <button class="ib" id="reset" title="Widok etapu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+      </div>
+    </div>
+
+    <aside class="panel">
+      <div class="eyebrow" id="pEyebrow">Etap 01 z 13</div>
+      <h2 id="pTitle"></h2>
+      <p id="pDesc"></p>
+      <div class="mini">Elementy tego etapu</div>
+      <div class="chips" id="chips"></div>
+      <div class="sel" id="sel">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-6h6v6"/></svg></div>
+        <div style="flex:1">
+          <h3 id="sName"></h3>
+          <div class="st" id="sStage"></div>
+          <p id="sText"></p>
+          <button class="link" id="sGo">Przejdź do etapu →</button>
+        </div>
+        <button class="x" id="sX" title="Zamknij">×</button>
+      </div>
+      <div class="done" id="done">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></svg></div>
+        <div><b>Dom gotowy do zamieszkania</b><span>Pozwolenie na użytkowanie i przekazanie kluczy.</span></div>
+      </div>
+    </aside>
+  </div>
+
+  <section class="timeline">
+    <div class="eyebrow" style="margin-bottom:18px">Przebieg budowy</div>
+    <div class="tl" id="tl"><div class="rail"></div><div class="fill" id="tlFill"></div></div>
+  </section>
+
+  <section class="phases" id="phases"></section>
+</main>
+
+<footer><div class="wrap">Animacja poglądowa. Rzeczywisty zakres i kolejność prac zależą od projektu, warunków gruntowych i wybranych technologii.</div></footer>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+/* ───────────────────────── DATA ───────────────────────── */
+const PHASES=[
+ {name:'Etap projektowy',title:'Opracowanie projektu i pozwolenie na budowę',text:'Projekt dopasowany do działki, wstępna wycena i formalności – budżet pod kontrolą od pierwszego dnia.',first:0,
+  icon:'<path d="M4 20h16M6 16l9-9 3 3-9 9H6z"/><path d="M13 9l3 3"/>'},
+ {name:'Etap budowy',title:'Realizacja projektu i nadzór nad pracami',text:'Od wykopu, przez żelbetowy stan surowy, po instalacje i wykończenie – koordynacja wszystkich ekip.',first:1,
+  icon:'<path d="M3 20h18M5 20V10h6v10M11 14h8v6"/><path d="M8 10V5l11 2"/>'},
+ {name:'Etap końcowy',title:'Odbiór i pozwolenie na użytkowanie',text:'Zagospodarowanie terenu, odbiory techniczne i przekazanie kluczy inwestorowi.',first:12,
+  icon:'<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/>'}];
+
+const STAGES=[
+ {short:'Projekt',ph:0,title:'Projekt i wytyczenie budynku',cam:[[21,15,25],[0,0,1.5]],
+  desc:'Wszystko zaczyna się od projektu dopasowanego do działki i budżetu. Po uzyskaniu pozwolenia na budowę geodeta wytycza budynek: na ławach ciesielskich rozpina się sznurki wyznaczające lica ścian. Miedziany kontur to bryła z projektu.'},
+ {short:'Wykop',ph:1,title:'Wykop pod budynek',cam:[[18,14,21],[2,-0.5,1.5]],
+  desc:'Dom bunkier jest częściowo zagłębiony w terenie, dlatego wykop sięga ok. 1,3 m poniżej poziomu gruntu. Urobek zostaje na działce – wróci jako zasypka i nasyp obsypujący bryłę.'},
+ {short:'Podbudowa',ph:1,title:'Chudy beton i izolacja pod płytą',cam:[[12,13,19],[0,-1,2]],
+  desc:'Dno wykopu wyrównuje się warstwą chudego betonu. Na nim układa się płyty XPS – ciągła izolacja termiczna pod całym budynkiem eliminuje mostki cieplne przy gruncie.'},
+ {short:'Płyta',ph:1,title:'Żelbetowa płyta fundamentowa',cam:[[13,10,18],[0,-1,2]],
+  desc:'Monolityczna płyta zbrojona dwiema siatkami stali przenosi ciężar masywnych ścian na grunt całą powierzchnią. Obejmuje również obniżone patio przed salonem.'},
+ {short:'Ściany',ph:1,title:'Monolityczne ściany żelbetowe',cam:[[14,15,15],[0,0.5,0]],
+  desc:'Serce domu bunkra. Zbrojenie zamyka się w szalunkach systemowych i zalewa betonem o wysokiej wytrzymałości. Małe, asymetryczne otwory okienne są zaplanowane już teraz. Równocześnie powstają ściany oporowe patio.'},
+ {short:'Strop',ph:1,title:'Żelbetowy strop-dach ze wspornikiem',cam:[[-15,11,18],[0,1.5,1.5]],
+  desc:'Na stemplach i deskowaniu betonuje się płytę stropową, która od strony ogrodu wysuwa się wspornikowo nad taras – to charakterystyczny, ciężki „daszek” bunkra. Po związaniu betonu stemple są demontowane.'},
+ {short:'Izolacje',ph:1,title:'Hydroizolacja i ocieplenie ścian',cam:[[-16,8,-15],[0,1,-2]],
+  desc:'Ściany w gruncie dostają powłokę bitumiczną i izolację obwodową z XPS. Nad terenem układa się wełnę mineralną (alternatywnie piankę PUR) z wiatroizolacją – całość zniknie pod betonową okładziną.'},
+ {short:'Zasypka',ph:1,title:'Zasypka i nasyp ziemny',cam:[[-18,10,-17],[0,0.5,-2]],
+  desc:'Przestrzeń wokół ścian zasypuje się warstwami i zagęszcza. Od północy formuje się nasyp, który obsypuje bryłę – dom wtapia się w teren i zyskuje dodatkową osłonę termiczną.'},
+ {short:'Okna',ph:1,title:'Stolarka okienna',cam:[[5,4,20],[0,0.6,3]],
+  desc:'Montaż okien w ciepłym montażu: wąskie, asymetrycznie rozmieszczone okna od strony wejścia i wielkie przeszklenie tarasowe, które wpuszcza światło do strefy dziennej.'},
+ {short:'Dach',ph:1,title:'Dach płaski',cam:[[14,16,14],[0,2.8,1]],
+  desc:'Na stropie układa się izolację termiczną ze spadkiem, a na niej nowoczesną membranę wywiniętą na attykę. Wpusty odprowadzają wodę. Jako wykończenie – opcjonalnie dach zielony.'},
+ {short:'Elewacja',ph:1,title:'Elewacja z betonu architektonicznego',cam:[[-17,6,19],[0,1,2]],
+  desc:'Ocieplenie zostaje zakryte okładziną z betonu architektonicznego z odciskiem desek i rytmem otworów po ściągach. Alternatywnie: ciemny tynk strukturalny lub okładzina kamienna.'},
+ {short:'Wnętrza',ph:1,title:'Instalacje i wnętrza',cam:[[7,17,12],[0,0,0]],cut:true,
+  desc:'Rekuperacja z odzyskiem ciepła, pompa ciepła, opcjonalnie klimatyzacja i smart home. Wnętrza kontynuują surowy charakter bryły: beton w salonie, stal w kuchni, szkło w łazience.'},
+ {short:'Odbiór',ph:2,title:'Teren i odbiór kluczy',cam:[[19,8,23],[0,0.5,2]],cut:false,
+  desc:'Zieleń na nasypie, drewniany taras w patio, schody i ścieżka. Po zakończeniu prac uzyskujemy pozwolenie na użytkowanie i przekazujemy klucze inwestorowi.'}];
+const N=STAGES.length;
+
+const INFO={
+ ghost:{s:0,n:'Bryła z projektu',t:'Obrys domu z projektu: niska, masywna bryła z płaskim dachem, wspornikiem nad tarasem i obniżonym patio.'},
+ lawy:{s:0,n:'Ławy ciesielskie i sznurki',t:'Drewniane ławy ustawione poza wykopem. Rozpięte na nich sznurki wyznaczają lica ścian przez cały stan zero.'},
+ grunt:{s:1,n:'Grunt rodzimy',t:'Humus zdejmuje się przed wykopem i odkłada do późniejszego zagospodarowania terenu. Pod nim grunt nośny.'},
+ koparka:{s:1,n:'Koparka',t:'Wykop wykonuje się mechanicznie, a dno doczyszcza ręcznie, aby nie naruszyć struktury gruntu nośnego.'},
+ halda:{s:1,n:'Hałda urobku',t:'Ziemia z wykopu odkładana na działce – posłuży jako zasypka i nasyp obsypujący dom.'},
+ chudy:{s:2,n:'Chudy beton',t:'Warstwa wyrównawcza (ok. 10 cm) z betonu niskiej klasy. Tworzy czystą, równą podstawę pod izolacje i zbrojenie.'},
+ xpsslab:{s:2,n:'XPS pod płytą',t:'Polistyren ekstrudowany odporny na nacisk i wilgoć – ciągła izolacja termiczna pod całym budynkiem.'},
+ desk:{s:3,n:'Deskowanie boczne płyty',t:'Obrzeże szalunkowe wyznaczające krawędź płyty; zdejmowane po związaniu betonu.'},
+ zbrP:{s:3,n:'Zbrojenie płyty',t:'Dwie siatki ze stali żebrowanej – dolna i górna – ułożone na dystansach zapewniających otulinę.'},
+ plyta:{s:3,n:'Płyta fundamentowa',t:'Żelbetowa płyta grubości ok. 30 cm. Równomiernie rozkłada obciążenia ciężkich ścian i jest zarazem podłogą na gruncie.'},
+ zbrS:{s:4,n:'Zbrojenie ścian',t:'Pręty pionowe i poziome w dwóch warstwach; przy otworach dodatkowe zbrojenie nadprożowe.'},
+ szal:{s:4,n:'Szalunki systemowe',t:'Płyty ze sklejki filmowanej w stalowych ramach, skręcane ściągami. Po związaniu betonu demontowane.'},
+ sciany:{s:4,n:'Ściany żelbetowe',t:'Monolityczne ściany grubości ok. 25 cm z betonu o wysokiej wytrzymałości – masa akumulacyjna, cisza i poczucie bezpieczeństwa.'},
+ oporowe:{s:4,n:'Ściany oporowe patio',t:'Żelbetowe ściany utrzymujące grunt wokół obniżonego tarasu przed salonem.'},
+ stemple:{s:5,n:'Stemple i deskowanie stropu',t:'Tymczasowe stalowe podpory z poszyciem ze sklejki, na których betonuje się strop.'},
+ zbrD:{s:5,n:'Zbrojenie stropu',t:'Siatki prętów w strefie dolnej i górnej; nad wspornikiem zagęszczone zbrojenie górne.'},
+ strop:{s:5,n:'Strop-dach ze wspornikiem',t:'Żelbetowa płyta wysunięta ok. 2,5 m nad taras. Osłania przeszklenia przed wysokim letnim słońcem i deszczem.'},
+ bitum:{s:6,n:'Hydroizolacja bitumiczna',t:'Grubowarstwowa powłoka chroniąca ściany w gruncie przed wilgocią i wodą gruntową.'},
+ xpsS:{s:6,n:'Izolacja obwodowa XPS',t:'Płyty XPS na ścianach w gruncie – odporne na wilgoć i parcie zasypki.'},
+ welna:{s:6,n:'Wełna mineralna',t:'Niepalne, paroprzepuszczalne ocieplenie ścian nad terenem (wariant: pianka PUR), osłonięte wiatroizolacją.'},
+ zasypka:{s:7,n:'Zasypka',t:'Grunt układany warstwami i zagęszczany mechanicznie, aby nie osiadał przy ścianach.'},
+ nasyp:{s:7,n:'Nasyp obsypujący',t:'Ziemny wał od północy – dom częściowo „chowa się” w terenie, co ogranicza straty ciepła i wzmacnia bunkrowy charakter.'},
+ okna:{s:8,n:'Okna w głębokich ościeżach',t:'Wąskie, asymetrycznie rozmieszczone okna w antracytowych ramach z pakietem trzyszybowym. Głębokie ościeża podkreślają grubość murów.'},
+ hs:{s:8,n:'Przeszklenie tarasowe',t:'Wielkoformatowe okno przesuwne otwierające salon na patio i ogród.'},
+ drzwi:{s:8,n:'Drzwi wejściowe',t:'Stalowe drzwi o podwyższonej odporności na włamanie, licujące z elewacją.'},
+ attyka:{s:9,n:'Attyka',t:'Żelbetowy murek wokół dachu – maskuje spadki i chroni krawędź pokrycia.'},
+ pir:{s:9,n:'Izolacja dachu ze spadkiem',t:'Płyty termoizolacyjne PIR docinane ze spadkiem, by woda spływała do wpustów.'},
+ membr:{s:9,n:'Membrana dachowa',t:'Nowoczesna hydroizolacja (np. EPDM lub TPO) łączona na zakładach i wywinięta na attykę.'},
+ zielony:{s:9,n:'Dach zielony (opcja)',t:'Ekstensywna roślinność rozchodnikowa – zatrzymuje deszczówkę i chroni membranę przed UV.'},
+ elew:{s:10,n:'Beton architektoniczny',t:'Okładzina z betonu z fakturą desek szalunkowych i otworami po ściągach. Surowa, trwała, nie wymaga malowania.'},
+ sofit:{s:10,n:'Podsufitka wspornika',t:'Spód wysięgu wykończony tym samym betonem co elewacja – bryła czyta się jako jeden monolit.'},
+ pompa:{s:11,n:'Pompa ciepła (opcja)',t:'Jednostka zewnętrzna powietrznej pompy ciepła – ogrzewanie podłogowe i ciepła woda.'},
+ reku:{s:11,n:'Rekuperacja',t:'Czerpnia i wyrzutnia wentylacji mechanicznej z odzyskiem ciepła – świeże powietrze bez otwierania okien.'},
+ smart:{s:11,n:'Oświetlenie i smart home',t:'Sterowanie światłem, ogrzewaniem i zabezpieczeniami z jednej aplikacji (opcja).'},
+ posadzka:{s:11,n:'Posadzka z betonu polerowanego',t:'Salon w betonie – polerowana wylewka z ogrzewaniem podłogowym.'},
+ kuchnia:{s:11,n:'Kuchnia ze stali',t:'Fronty i wyspa ze stali nierdzewnej – industrialny charakter i odporność.'},
+ lazienka:{s:11,n:'Łazienka ze szkłem',t:'Szklane przegrody prysznica przepuszczają światło w głąb pomieszczenia.'},
+ dzialowe:{s:11,n:'Ściany działowe',t:'Lekkie przegrody wydzielające sypialnię i łazienkę.'},
+ meble:{s:11,n:'Wyposażenie',t:'Przykładowa aranżacja strefy dziennej i sypialni.'},
+ taras:{s:12,n:'Taras w patio',t:'Drewniany taras w obniżonym patio, osłonięty wspornikiem stropu i ścianami oporowymi.'},
+ schody:{s:12,n:'Schody terenowe',t:'Betonowe stopnie łączące patio z poziomem ogrodu.'},
+ zielen:{s:12,n:'Zieleń i trawy ozdobne',t:'Trawnik na nasypie i zasypce oraz kępy traw – roślinność wtapia bryłę w krajobraz.'},
+ sciezka:{s:12,n:'Ścieżka żwirowa',t:'Przepuszczalna nawierzchnia prowadząca od ogrodu do patio.'},
+ drzewa:{s:12,n:'Drzewa',t:'Nasadzenia, które z czasem otulą masywną bryłę.'}};
+
+/* ───────────────────────── TEXTURES ───────────────────────── */
+let seed=1234567;
+const rnd=()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
+const R=(a,b)=>a+(b-a)*rnd();
+const pickc=a=>a[(rnd()*a.length)|0];
+function each(S,x,y,r,fn){for(const dx of[-S,0,S])for(const dy of[-S,0,S]){const X=x+dx,Y=y+dy;if(X+r<0||X-r>S||Y+r<0||Y-r>S)continue;fn(X,Y);}}
+function blobs(g,S,n,rgbs,r0,r1,a){for(let i=0;i<n;i++){const x=rnd()*S,y=rnd()*S,r=R(r0,r1),c=pickc(rgbs);each(S,x,y,r,(X,Y)=>{const gr=g.createRadialGradient(X,Y,0,X,Y,r);gr.addColorStop(0,`rgba(${c},${a})`);gr.addColorStop(1,`rgba(${c},0)`);g.fillStyle=gr;g.fillRect(X-r,Y-r,2*r,2*r);});}}
+function dots(g,S,n,cols,r0,r1){for(let i=0;i<n;i++){const x=rnd()*S,y=rnd()*S,r=R(r0,r1);g.fillStyle=pickc(cols);each(S,x,y,r,(X,Y)=>{g.beginPath();g.arc(X,Y,r,0,7);g.fill();});}}
+function noise(g,S,amt){const d=g.getImageData(0,0,S,S),a=d.data;for(let i=0;i<a.length;i+=4){const n=(rnd()-.5)*amt;a[i]+=n;a[i+1]+=n;a[i+2]+=n;}g.putImageData(d,0,0);}
+function strokes(g,S,n,cols,l0,l1,a0,a1,w=1){g.lineWidth=w;g.lineCap='round';for(let i=0;i<n;i++){const x=rnd()*S,y=rnd()*S,l=R(l0,l1),an=R(a0,a1);g.strokeStyle=pickc(cols);g.beginPath();g.moveTo(x,y);g.lineTo(x+Math.cos(an)*l,y+Math.sin(an)*l);g.stroke();}}
+function grid(g,S,rows,cols,stagger,style,w=2){g.fillStyle=style;const rh=S/rows,cw=S/cols;for(let r=0;r<rows;r++){g.fillRect(0,r*rh,S,w);const off=stagger&&(r%2)?cw/2:0;for(let c=0;c<=cols;c++){const x=(c*cw+off)%S;g.fillRect(x,r*rh,w,rh);}}}
+
+const DRAW={
+ concrete(g,S){g.fillStyle='#9e9b96';g.fillRect(0,0,S,S);blobs(g,S,260,['255,255,255','70,68,64'],20,90,.07);dots(g,S,1100,['rgba(55,53,50,.55)','rgba(85,83,78,.45)'],.5,1.7);noise(g,S,18);},
+ board(g,S){g.fillStyle='#a8a59f';g.fillRect(0,0,S,S);const rows=16,h=S/rows;
+  for(let r=0;r<rows;r++){const y=r*h;g.fillStyle=`rgba(${rnd()<.5?'0,0,0':'255,255,255'},${R(.03,.09)})`;g.fillRect(0,y,S,h);
+   g.lineWidth=1;for(let k=0;k<16;k++){g.strokeStyle=`rgba(60,58,54,${R(.05,.12)})`;g.beginPath();const yy=y+R(3,h-3),ph=R(0,6),am=R(.4,2.2);g.moveTo(0,yy);for(let x=0;x<=S;x+=16)g.lineTo(x,yy+Math.sin(x*.015+ph)*am);g.stroke();}
+   if(rnd()<.45){const kx=rnd()*S,ky=y+h/2;g.strokeStyle='rgba(60,58,54,.14)';for(let q=1;q<5;q++){g.beginPath();g.ellipse(kx,ky,q*6,q*2.2,0,0,7);g.stroke();}}
+   g.fillStyle='rgba(40,39,37,.38)';g.fillRect(0,y,S,2);g.fillStyle='rgba(255,255,255,.2)';g.fillRect(0,y+2,S,1);
+   g.fillStyle='rgba(40,39,37,.25)';g.fillRect(rnd()*S,y,2,h);}
+  blobs(g,S,140,['255,255,255','60,58,54'],30,140,.05);dots(g,S,1600,['rgba(50,48,46,.5)'],.5,1.6);
+  const st=S/4;for(let i=0;i<4;i++)for(let j=0;j<4;j++){const x=st/2+i*st,y=st/2+j*st+h/2;g.fillStyle='rgba(0,0,0,.10)';g.beginPath();g.arc(x,y,15,0,7);g.fill();g.fillStyle='#4b4946';g.beginPath();g.arc(x,y,8,0,7);g.fill();g.fillStyle='rgba(255,255,255,.22)';g.beginPath();g.arc(x-2,y-2,3,0,7);g.fill();}
+  noise(g,S,14);},
+ soil(g,S){g.fillStyle='#6b4d34';g.fillRect(0,0,S,S);blobs(g,S,200,['40,25,15','150,120,90'],15,70,.12);dots(g,S,1600,['#8f7b63','#4a3423','#a39078','#5d4430'],.8,2.6);noise(g,S,28);},
+ grass(g,S){g.fillStyle='#6b7a40';g.fillRect(0,0,S,S);blobs(g,S,120,['60,75,30','150,150,80'],20,80,.12);strokes(g,S,9000,['#5a6b33','#7f8f4a','#93984f','#a39a5a','#4e5f2c','#6f8040'],3,9,-Math.PI/2-.5,-Math.PI/2+.5,1.4);noise(g,S,14);},
+ ply(g,S){g.fillStyle='#7d3c22';g.fillRect(0,0,S,S);strokes(g,S,900,['rgba(60,25,12,.25)','rgba(150,80,50,.18)'],20,80,-.04,.04,1);blobs(g,S,60,['40,15,5','170,100,60'],20,60,.1);
+  const pw=S/2;for(let i=0;i<2;i++){g.strokeStyle='#e0ae1c';g.lineWidth=16;g.strokeRect(i*pw+8,8,pw-16,S-16);g.strokeStyle='rgba(0,0,0,.35)';g.lineWidth=2;g.strokeRect(i*pw+17,17,pw-34,S-34);g.fillStyle='#1d1d1d';[S*.22,S*.5,S*.78].forEach(y=>{g.beginPath();g.arc(i*pw+pw/2,y,6,0,7);g.fill();});}noise(g,S,12);},
+ xps(g,S){g.fillStyle='#88bf6b';g.fillRect(0,0,S,S);blobs(g,S,80,['255,255,255','40,90,30'],20,80,.07);dots(g,S,1500,['rgba(255,255,255,.18)','rgba(40,90,30,.15)'],.6,1.4);noise(g,S,10);grid(g,S,4,2,true,'rgba(30,70,25,.5)');},
+ wool(g,S){g.fillStyle='#d6b764';g.fillRect(0,0,S,S);strokes(g,S,6000,['rgba(150,110,40,.35)','rgba(250,230,160,.45)','rgba(120,85,30,.25)'],3,12,0,Math.PI*2,1);noise(g,S,18);grid(g,S,4,2,true,'rgba(110,80,30,.45)');},
+ bitumen(g,S){g.fillStyle='#1d1d1d';g.fillRect(0,0,S,S);blobs(g,S,80,['80,80,80','0,0,0'],10,60,.15);dots(g,S,1200,['#303030','#141414'],.6,1.8);noise(g,S,10);},
+ membrane(g,S){g.fillStyle='#3d4043';g.fillRect(0,0,S,S);blobs(g,S,60,['90,95,100','20,20,20'],30,120,.08);noise(g,S,8);for(let i=0;i<3;i++){const y=i*S/3;g.fillStyle='rgba(255,255,255,.07)';g.fillRect(0,y,S,10);g.fillStyle='rgba(0,0,0,.35)';g.fillRect(0,y+10,S,1.5);}},
+ pir(g,S){g.fillStyle='#c8b27c';g.fillRect(0,0,S,S);strokes(g,S,400,['rgba(255,255,255,.12)','rgba(120,100,50,.12)'],40,160,-.02,.02,2);noise(g,S,6);grid(g,S,2,2,false,'rgba(90,75,40,.5)');},
+ deck(g,S){const n=10,h=S/n;for(let i=0;i<n;i++){g.fillStyle=pickc(['#8b6141','#7a5236','#946a48','#6f4a30','#83593b']);g.fillRect(0,i*h,S,h);g.lineWidth=1;for(let k=0;k<8;k++){g.strokeStyle=`rgba(40,25,15,${R(.08,.18)})`;g.beginPath();const yy=i*h+R(4,h-4);g.moveTo(0,yy);for(let x=0;x<=S;x+=16)g.lineTo(x,yy+Math.sin(x*.02+k)*1.2);g.stroke();}g.fillStyle='#2a1d14';g.fillRect(0,i*h,S,3);g.fillRect(rnd()*S,i*h,3,h);}noise(g,S,12);},
+ sedum(g,S){g.fillStyle='#5b7838';g.fillRect(0,0,S,S);blobs(g,S,100,['120,40,40','200,180,80','40,70,20'],15,50,.25);dots(g,S,6000,['#7a9a3e','#4b6a2a','#9aa74a','#b0563a','#c47a46','#8a3f3a','#d9c35a','#6e8f35'],1,3);noise(g,S,14);},
+ gravel(g,S){g.fillStyle='#9d988f';g.fillRect(0,0,S,S);dots(g,S,1800,['rgba(0,0,0,.35)'],2,5);dots(g,S,6500,['#b8b2a6','#8f8a80','#cfc8bb','#a39d92','#7c776e','#c2b8a4'],1.5,4);noise(g,S,14);},
+ floor(g,S){g.fillStyle='#b9b5ad';g.fillRect(0,0,S,S);blobs(g,S,90,['255,255,255','90,88,84'],60,180,.07);dots(g,S,300,['rgba(80,78,74,.4)'],.5,1.2);noise(g,S,6);},
+ chudy(g,S){g.fillStyle='#8e8a82';g.fillRect(0,0,S,S);blobs(g,S,200,['255,255,255','50,48,44'],15,60,.08);dots(g,S,2800,['rgba(45,43,40,.55)','rgba(170,165,155,.4)'],.6,2.2);noise(g,S,30);},
+ fan(g,S){g.fillStyle='#dcdcd9';g.fillRect(0,0,S,S);noise(g,S,6);const cx=S*.4,cy=S/2,r=S*.33;g.fillStyle='#2f3030';g.beginPath();g.arc(cx,cy,r,0,7);g.fill();g.strokeStyle='#9a9a98';g.lineWidth=2;for(let k=1;k<9;k++){g.beginPath();g.arc(cx,cy,r*k/9,0,7);g.stroke();}for(let k=0;k<12;k++){const a=k*Math.PI/6;g.beginPath();g.moveTo(cx,cy);g.lineTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r);g.stroke();}g.fillStyle='#bdbdba';g.fillRect(S*.8,S*.2,S*.12,S*.6);g.fillStyle='#8a8a88';for(let y=S*.24;y<S*.78;y+=12)g.fillRect(S*.82,y,S*.08,3);}};
+
+const canvases={};
+function makeTex(name,size,repeat=true){const c=document.createElement('canvas');c.width=c.height=size;DRAW[name](c.getContext('2d'),size);canvases[name]=c;const t=new THREE.CanvasTexture(c);if(repeat)t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;return t;}
+function TM(name,scale,params={},bump=1,size=512){const t=makeTex(name,size);const m=new THREE.MeshStandardMaterial({map:t,roughness:.9,metalness:0,...params});if(bump){m.bumpMap=t;m.bumpScale=bump;}m.userData.scale=scale;return m;}
+
+const MAT={
+ concrete:TM('concrete',3,{roughness:.92},1.2),
+ board:TM('board',2.4,{roughness:.88},2,1024),
+ soil:TM('soil',3,{roughness:1},1.5),
+ grass:TM('grass',3,{roughness:1},1.2),
+ ply:TM('ply',2.4,{roughness:.55},.6),
+ xps:TM('xps',2.5,{roughness:.8},.6),
+ wool:TM('wool',2.4,{roughness:1},2),
+ bitumen:TM('bitumen',2,{roughness:.45},.6),
+ membrane:TM('membrane',6,{roughness:.6},.5),
+ pir:TM('pir',2.4,{roughness:.4,metalness:.35},.4),
+ deck:TM('deck',1.45,{roughness:.75},1),
+ sedum:TM('sedum',2,{roughness:1},2.5),
+ gravel:TM('gravel',1.5,{roughness:1},2.5),
+ floor:TM('floor',4,{roughness:.28},.3),
+ chudy:TM('chudy',2,{roughness:1},2)};
+const C=(c,p={})=>new THREE.MeshStandardMaterial({color:c,roughness:.6,...p});
+const MR=C(0x6e4a37,{metalness:.55,roughness:.55});           // rebar
+const MF=C(0x2b2c2e,{metalness:.45,roughness:.45});           // window frames
+const MDoor=C(0x1f2022,{metalness:.6,roughness:.35});
+const MSteel=C(0xc9cccd,{metalness:.95,roughness:.22});
+const MProp=C(0x9aa2a6,{metalness:.8,roughness:.35});
+const MWood=C(0xb48a5a,{roughness:.8});
+const MWhite=C(0xefeeea,{roughness:.85});
+const MFabric=C(0x3b3b3b,{roughness:1});
+const MYellow=C(0xe0a21a,{roughness:.5,metalness:.2});
+const MDark=C(0x262626,{roughness:.85});
+const MString=new THREE.MeshBasicMaterial({color:0xe0662a});
+const MLamp=new THREE.MeshStandardMaterial({color:0xfff6e6,emissive:0xffcf8a,emissiveIntensity:0});
+const MGlass=new THREE.MeshPhysicalMaterial({color:0xa9c0cc,metalness:.1,roughness:.04,transparent:true,opacity:.32,side:THREE.DoubleSide,depthWrite:false});
+const MGhost=new THREE.LineBasicMaterial({color:0xad6d2f});
+const MGhostFill=new THREE.MeshBasicMaterial({color:0xad6d2f,transparent:true,opacity:.1,depthWrite:false,side:THREE.DoubleSide});
+
+document.getElementById('heroBg').style.backgroundImage=`url(${canvases.board.toDataURL('image/jpeg',.8)})`;
+
+/* ───────────────────────── SCENE ───────────────────────── */
+const viewer=document.getElementById('viewer'),canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.0;
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+const scene=new THREE.Scene();
+const BG=0xe9e7e3;scene.background=new THREE.Color(BG);scene.fog=new THREE.Fog(BG,55,120);
+const pmrem=new THREE.PMREMGenerator(renderer);scene.environment=pmrem.fromScene(new RoomEnvironment(),.04).texture;
+scene.add(new THREE.HemisphereLight(0xf4f1ea,0x7d705f,.55));
+const sun=new THREE.DirectionalLight(0xfff3e2,2.4);sun.position.set(-14,24,17);
+sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-24,right:24,top:24,bottom:-24,near:1,far:80});sun.shadow.bias=-.0004;sun.shadow.normalBias=.03;
+scene.add(sun);
+const camera=new THREE.PerspectiveCamera(38,1,.1,300);camera.position.set(26,19,30);
+const controls=new OrbitControls(camera,canvas);controls.enableDamping=true;controls.maxPolarAngle=1.48;controls.minDistance=5;controls.maxDistance=70;controls.target.set(0,0,1.5);
+
+/* helpers */
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+const prog=(P,s,t0,t1)=>clamp((P-s-t0)/Math.max(t1-t0,1e-4),0,1);
+
+function box(x0,x1,y0,y1,z0,z1,mat,shadow=true){
+ const w=x1-x0,h=y1-y0,d=z1-z0,geo=new THREE.BoxGeometry(w,h,d);geo.translate(0,h/2,0);
+ const cx=(x0+x1)/2,cz=(z0+z1)/2,sc=(Array.isArray(mat)?mat[2]:mat).userData.scale||2;
+ const p=geo.attributes.position,n=geo.attributes.normal,uv=geo.attributes.uv;
+ for(let i=0;i<p.count;i++){const X=p.getX(i)+cx,Y=p.getY(i)+y0,Z=p.getZ(i)+cz;let u,v;
+  if(Math.abs(n.getX(i))>.5){u=Z;v=Y;}else if(Math.abs(n.getY(i))>.5){u=X;v=Z;}else{u=X;v=Y;}uv.setXY(i,u/sc,v/sc);}
+ const m=new THREE.Mesh(geo,mat);m.position.set(cx,y0,cz);m.castShadow=shadow;m.receiveShadow=true;return m;}
+
+const items=[];
+function reg(obj,o={}){const it={obj,s:0,t0:0,t1:1,anim:'none',ranim:null,rs:0,rt0:0,rt1:1,...o};
+ obj.userData.base=obj.position.clone();obj.userData.bs=obj.scale.clone();
+ if(o.info)obj.traverse(c=>{c.userData.info=o.info;});items.push(it);scene.add(obj);return it;}
+function grp(children){const g=new THREE.Group();children.forEach(c=>g.add(c));return g;}
+
+const bargeo=new THREE.BoxGeometry(1,1,1);
+function bars(list,mat,baseY){const im=new THREE.InstancedMesh(bargeo,mat,list.length);const m4=new THREE.Matrix4(),q=new THREE.Quaternion();
+ list.forEach((b,i)=>{m4.compose(new THREE.Vector3((b[0]+b[1])/2,(b[2]+b[3])/2-baseY,(b[4]+b[5])/2),q,new THREE.Vector3(b[1]-b[0],b[3]-b[2],b[5]-b[4]));im.setMatrixAt(i,m4);});
+ im.position.y=baseY;im.castShadow=true;im.receiveShadow=true;im.frustumCulled=false;im.instanceMatrix.needsUpdate=true;return im;}
+
+function segs(dir,t0,t1,a0,a1,y0,y1,ops,mat){
+ const pts=[a0,a1];ops.forEach(o=>{[o.a,o.b].forEach(v=>{if(v>a0&&v<a1)pts.push(v);});});pts.sort((p,q)=>p-q);const out=[];
+ const mk=(p,q,ya,yb)=>{if(yb-ya<.01||q-p<.01)return;out.push({m:dir==='x'?box(p,q,ya,yb,t0,t1,mat):box(t0,t1,ya,yb,p,q,mat),py0:ya,py1:yb});};
+ for(let i=0;i<pts.length-1;i++){const p=pts[i],q=pts[i+1];if(q-p<1e-4)continue;const mid=(p+q)/2,o=ops.find(o=>mid>o.a&&mid<o.b);
+  if(!o)mk(p,q,y0,y1);else{if(o.y0>y0)mk(p,q,y0,Math.min(o.y0,y1));if(o.y1<y1)mk(p,q,Math.max(o.y1,y0),y1);}}
+ return out;}
+const regSegs=(list,o)=>list.forEach(s=>reg(s.m,{...o,py0:s.py0,py1:s.py1}));
+
+/* ── geometry constants ── */
+const OPEN={
+ N:[{a:-3,b:3,y0:1.5,y1:2.0},{a:4.6,b:5.4,y0:1.0,y1:2.0}],
+ S:[{a:-6,b:2.5,y0:-0.8,y1:2.0},{a:4,b:5.1,y0:-0.8,y1:1.6}],
+ W:[{a:-1.0,b:-0.6,y0:0.3,y1:2.0},{a:1.6,b:2.0,y0:0.3,y1:2.0}],
+ E:[{a:-2.5,b:0.5,y0:1.2,y1:1.8}]};
+const WALLS=[
+ {k:'N',dir:'x',t:[-4.5,-4.25],a:[-7,7]},
+ {k:'S',dir:'x',t:[4.25,4.5],a:[-7,7]},
+ {k:'W',dir:'z',t:[-7,-6.75],a:[-4.25,4.25]},
+ {k:'E',dir:'z',t:[6.75,7],a:[-4.25,4.25]}];
+
+/* ── 0: ground ── */
+const GM=[MAT.soil,MAT.soil,MAT.grass,MAT.soil,MAT.soil,MAT.soil];
+[[-60,60,-60,-6],[-60,60,8.5,60],[-60,-8.5,-6,8.5],[8.5,60,-6,8.5]].forEach(([x0,x1,z0,z1])=>reg(box(x0,x1,-4,0,z0,z1,GM),{info:'grunt'}));
+reg(box(-8.5,8.5,-4,-1.3,-6,8.5,MAT.soil),{info:'grunt'});
+reg(box(-8.5,8.5,-1.3,0,-6,8.5,GM),{info:'grunt',ranim:'shrink',rs:1,rt0:.15,rt1:.85});
+
+/* ghost */
+{const g=new THREE.Group();const gb=(x0,x1,y0,y1,z0,z1,fill=true)=>{const geo=new THREE.BoxGeometry(x1-x0,y1-y0,z1-z0);const l=new THREE.LineSegments(new THREE.EdgesGeometry(geo),MGhost);l.position.set((x0+x1)/2,(y0+y1)/2+.8,(z0+z1)/2);g.add(l);if(fill){const f=new THREE.Mesh(geo,MGhostFill);f.position.copy(l.position);g.add(f);}};
+ gb(-7.23,7.23,-.8,3.2,-4.73,4.73);gb(-7.23,7.23,2.32,3.2,4.73,7.23);gb(-7.25,7.25,-.8,.3,4.73,8.5,false);
+ g.position.y=-.8;reg(g,{info:'ghost',s:0,t0:.3,t1:1,anim:'grow',ranim:'hide',rs:1,rt0:0,rt1:.05});}
+
+/* ławy + sznurki */
+{const L=new THREE.Group(),S=new THREE.Group();
+ const corners=[[-9.6,-7.2],[9.6,-7.2],[-9.6,10],[9.6,10]];
+ corners.forEach(([cx,cz])=>{const sx=Math.sign(cx),sz=Math.sign(cz);
+  L.add(box(Math.min(cx,cx-sx*3.4),Math.max(cx,cx-sx*3.4),.55,.7,cz-.02,cz+.02,MWood));
+  L.add(box(cx-.02,cx+.02,.55,.7,Math.min(cz,cz-sz*3.6),Math.max(cz,cz-sz*3.6),MWood));
+  [[cx,cz],[cx-sx*3.4,cz],[cx,cz-sz*3.6]].forEach(([x,z])=>L.add(box(x-.05,x+.05,0,.85,z-.05,z+.05,MWood)));});
+ const sh=.008;
+ [-4.73,8.5].forEach(z=>S.add(box(-9.6,9.6,.72-sh,.72+sh,z-sh,z+sh,MString,false)));
+ [-7.23,7.23].forEach(x=>S.add(box(x-sh,x+sh,.72-sh,.72+sh,-7.2,10,MString,false)));
+ reg(L,{info:'lawy',s:0,t0:0,t1:.3,anim:'grow',ranim:'hide',rs:7,rt0:0,rt1:.05});
+ reg(S,{info:'lawy',s:0,t0:.25,t1:.45,anim:'grow',ranim:'hide',rs:4,rt0:0,rt1:.05});}
+
+/* ── 1: excavation ── */
+function excavator(){const g=new THREE.Group();const b=(w,h,d,m,x,y,z,p=g)=>{const me=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);me.position.set(x,y,z);me.castShadow=true;p.add(me);return me;};
+ b(3.4,.7,.6,MDark,0,.35,-1);b(3.4,.7,.6,MDark,0,.35,1);b(1.2,.4,1.6,MDark,0,.85,0);
+ const up=new THREE.Group();up.position.y=1.05;g.add(up);
+ b(2.6,.9,2,MYellow,.35,.45,0,up);b(1,1.1,.9,MYellow,-.45,1.45,-.5,up);b(.9,.75,.92,MGlass,-.45,1.5,-.5,up);b(.6,.9,2,MDark,1.55,.45,0,up);
+ const boom=new THREE.Group();boom.position.set(-.8,.8,.4);up.add(boom);b(3,.38,.38,MYellow,-1.5,0,0,boom);
+ const stick=new THREE.Group();stick.position.set(-3,0,0);boom.add(stick);b(.32,2.1,.32,MYellow,0,-1.05,0,stick);b(.7,.55,.85,MDark,-.25,-2.2,0,stick);
+ g.userData.parts={boom,stick,up};return g;}
+{const ex=excavator();const pt=ex.userData.parts;
+ reg(ex,{info:'koparka',custom:(P)=>{const t=P-1;if(t<=0||t>=1){ex.visible=false;return;}ex.visible=true;let x=10.6;
+  if(t<.15)x+= (1-ease(t/.15))*16;else if(t>.85)x+=ease((t-.85)/.15)*16;ex.position.set(x,0,1.5);
+  const k=clamp((t-.15)/.7,0,1);pt.boom.rotation.z=.32+.2*Math.sin(k*Math.PI*12);pt.stick.rotation.z=-.4+.32*Math.sin(k*Math.PI*12+1.2);pt.up.rotation.y=.35*Math.sin(k*Math.PI*6);}});
+ const cone=new THREE.ConeGeometry(2.6,1.9,28,1);cone.translate(0,.95,0);const uv=cone.attributes.uv;for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)*5,uv.getY(i)*1.2);
+ const pile=new THREE.Mesh(cone,MAT.soil);pile.position.set(13.5,0,-5);pile.castShadow=pile.receiveShadow=true;
+ reg(pile,{info:'halda',s:1,t0:.2,t1:.85,anim:'grow',ranim:'shrink',rs:7,rt0:0,rt1:.6});}
+
+/* ── 2: sub-base ── */
+reg(box(-7.6,7.6,-1.3,-1.25,-5.1,8.5,MAT.chudy),{info:'chudy',s:2,t0:0,t1:.35,anim:'grow'});
+[[-4.75,-1.4],[-1.4,1.95],[1.95,5.25],[5.25,8.5]].forEach(([z0,z1],i)=>reg(box(-7.25,7.25,-1.25,-1.1,z0,z1,MAT.xps),{info:'xpsslab',s:2,t0:.35+i*.15,t1:.55+i*.15,anim:'drop'}));
+
+/* ── 3: foundation slab ── */
+{const D=new THREE.Group();const y0=-1.1,y1=-.75;
+ D.add(box(-7.33,-7.25,y0,y1,-4.83,8.5,MAT.ply));D.add(box(7.25,7.33,y0,y1,-4.83,8.5,MAT.ply));D.add(box(-7.33,7.33,y0,y1,-4.83,-4.75,MAT.ply));
+ reg(D,{info:'desk',s:3,t0:0,t1:.18,anim:'grow',ranim:'lift',rs:3,rt0:.9,rt1:1});
+ const L=[];const r=.0125;
+ [-1.02,-.9].forEach(y=>{for(let z=-4.6;z<=8.4;z+=.45)L.push([-7.15,7.15,y-r,y+r,z-r,z+r]);for(let x=-7.1;x<=7.1;x+=.45)L.push([x-r,x+r,y+r,y+3*r,-4.65,8.45]);});
+ reg(bars(L,MR,-1.1),{info:'zbrP',s:3,t0:.15,t1:.45,anim:'drop'});
+ reg(box(-7.25,7.25,-1.1,-.8,-4.75,8.5,MAT.concrete),{info:'plyta',s:3,t0:.45,t1:.9,anim:'grow'});}
+
+/* ── 4: walls ── */
+{const L=[];const r=.012;
+ WALLS.forEach(w=>{const ops=OPEN[w.k];[w.t[0]+.05,w.t[1]-.05].forEach(t=>{
+  for(let a=w.a[0]+.1;a<=w.a[1]-.05;a+=.35){if(ops.some(o=>a>o.a-.05&&a<o.b+.05))continue;
+   L.push(w.dir==='x'?[a-r,a+r,-.8,2.45,t-r,t+r]:[t-r,t+r,-.8,2.45,a-r,a+r]);}
+  for(let y=-.6;y<=2.35;y+=.4){let iv=[[w.a[0],w.a[1]]];ops.filter(o=>y>o.y0-.05&&y<o.y1+.05).forEach(o=>{iv=iv.flatMap(([p,q])=>{if(o.b<=p||o.a>=q)return[[p,q]];const out=[];if(o.a>p)out.push([p,o.a]);if(o.b<q)out.push([o.b,q]);return out;});});
+   iv.forEach(([p,q])=>L.push(w.dir==='x'?[p,q,y-r,y+r,t-r,t+r]:[t-r,t+r,y-r,y+r,p,q]));}});});
+ reg(bars(L,MR,-.8),{info:'zbrS',s:4,t0:0,t1:.22,anim:'grow',ranim:'hide',rs:4,rt0:.86,rt1:.9});
+ WALLS.forEach((w,i)=>{const F=new THREE.Group(),th=.06,y0=-.8,y1=2.55,[t0,t1]=w.t,a0=w.a[0]-.06,a1=w.a[1]+.06;
+  if(w.dir==='x'){F.add(box(a0,a1,y0,y1,t0-th,t0,MAT.ply));F.add(box(a0,a1,y0,y1,t1,t1+th,MAT.ply));}
+  else{F.add(box(t0-th,t0,y0,y1,a0,a1,MAT.ply));F.add(box(t1,t1+th,y0,y1,a0,a1,MAT.ply));}
+  reg(F,{info:'szal',s:4,t0:.18+i*.05,t1:.36+i*.05,anim:'drop',ranim:'lift',rs:4,rt0:.86+i*.02,rt1:.96+i*.01});
+  regSegs(segs(w.dir,w.t[0],w.t[1],w.a[0],w.a[1],-.8,2.4,OPEN[w.k],MAT.concrete),{info:'sciany',s:4,t0:.45,t1:.86,anim:'rise',ly0:-.8,ly1:2.4});});
+ [[-7.25,-6.95,4.5,8.5],[6.95,7.25,4.5,8.5],[-6.95,5,8.2,8.5]].forEach(([x0,x1,z0,z1])=>reg(box(x0,x1,-.8,.3,z0,z1,MAT.concrete),{info:'oporowe',s:4,t0:.5,t1:.86,anim:'grow'}));}
+
+/* ── 5: roof slab ── */
+{const L=[];for(let x=-6.3;x<=6.4;x+=1.4)for(let z=-3.9;z<=6.7;z+=1.4){if(Math.abs(z-4.37)<.35)continue;L.push([x-.04,x+.04,-.8,2.34,z-.04,z+.04]);
+  L.push([x-.5,x+.5,2.26,2.34,z-.05,z+.05]);}
+ reg(bars(L,MProp,-.8),{info:'stemple',s:5,t0:0,t1:.25,anim:'grow',ranim:'hide',rs:5,rt0:.94,rt1:.97});
+ const D=grp([box(-6.75,6.75,2.34,2.4,-4.25,4.25,MAT.ply),box(-7,7,2.34,2.4,4.5,7,MAT.ply)]);
+ reg(D,{info:'stemple',s:5,t0:.2,t1:.38,anim:'drop',ranim:'hide',rs:5,rt0:.94,rt1:.97});
+ const B=[];const r=.012;[2.48,2.62].forEach(y=>{for(let z=-4.4;z<=6.9;z+=.45)B.push([-6.9,6.9,y-r,y+r,z-r,z+r]);for(let x=-6.9;x<=6.9;x+=.45)B.push([x-r,x+r,y+r,y+3*r,-4.4,6.9]);});
+ reg(bars(B,MR,2.4),{info:'zbrD',s:5,t0:.35,t1:.55,anim:'drop',roof:true});
+ reg(box(-7,7,2.4,2.7,-4.5,7,MAT.concrete),{info:'strop',s:5,t0:.55,t1:.9,anim:'grow',roof:true});}
+
+/* ── 6: insulation ── */
+{const NEW=[{k:'N',dir:'x',t:[-4.65,-4.5],a:[-7.15,7.15]},{k:'W',dir:'z',t:[-7.15,-7],a:[-4.5,4.5]},{k:'E',dir:'z',t:[7,7.15],a:[-4.5,4.5]}];
+ const bit={N:['x',[-4.52,-4.5],[-7.02,7.02]],W:['z',[-7.02,-7],[-4.5,4.5]],E:['z',[7,7.02],[-4.5,4.5]]};
+ Object.values(bit).forEach(([d,t,a])=>reg(d==='x'?box(a[0],a[1],-.8,.15,t[0],t[1],MAT.bitumen):box(t[0],t[1],-.8,.15,a[0],a[1],MAT.bitumen),{info:'bitum',s:6,t0:0,t1:.25,anim:'grow'}));
+ NEW.forEach(w=>{reg(w.dir==='x'?box(w.a[0],w.a[1],-.8,.1,w.t[0],w.t[1],MAT.xps):box(w.t[0],w.t[1],-.8,.1,w.a[0],w.a[1],MAT.xps),{info:'xpsS',s:6,t0:.25,t1:.5,anim:'grow'});
+  regSegs(segs(w.dir,w.t[0],w.t[1],w.a[0],w.a[1],.1,2.7,OPEN[w.k],MAT.wool),{info:'welna',s:6,t0:.5,t1:1,anim:'rise',ly0:.1,ly1:2.7});});
+ regSegs(segs('x',4.5,4.65,-7.15,7.15,-.8,2.4,OPEN.S,MAT.wool),{info:'welna',s:6,t0:.5,t1:1,anim:'rise',ly0:-.8,ly1:2.4});}
+
+/* ── 7: backfill + berm ── */
+[[-8.5,-7.23,-6,8.5],[7.23,8.5,-6,8.5],[-7.23,7.23,-6,-4.73]].forEach(([x0,x1,z0,z1])=>reg(box(x0,x1,-1.3,0,z0,z1,MAT.soil),{info:'zasypka',s:7,t0:0,t1:.55,anim:'grow'}));
+function berm(mat,lift=0){const sh=new THREE.Shape();sh.moveTo(4.73,0);sh.lineTo(4.73,1.0+lift);sh.lineTo(5.6,1.0+lift);sh.lineTo(11.2+lift*2,0);sh.lineTo(4.73,0);
+ const geo=new THREE.ExtrudeGeometry(sh,{depth:17,bevelEnabled:false});geo.rotateY(Math.PI/2);geo.translate(-8.5,0,0);
+ const uv=geo.attributes.uv;for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)/3,uv.getY(i)/3);geo.computeVertexNormals();
+ const m=new THREE.Mesh(geo,mat);m.castShadow=m.receiveShadow=true;return m;}
+reg(berm(MAT.soil),{info:'nasyp',s:7,t0:.45,t1:1,anim:'grow'});
+
+/* ── 8: windows ── */
+function win(dir,c,o,kind){const g=new THREE.Group(),w=o.b-o.a,fw=.07,dp=.09,cx=(o.a+o.b)/2,cy=(o.y0+o.y1)/2;
+ const add=(u0,u1,v0,v1,mat,d=dp)=>{const W=u1-u0,H=v1-v0,geo=dir==='x'?new THREE.BoxGeometry(W,H,d):new THREE.BoxGeometry(d,H,W);const m=new THREE.Mesh(geo,mat),uc=(u0+u1)/2-cx,vc=(v0+v1)/2-cy;
+  if(dir==='x')m.position.set(uc,vc,0);else m.position.set(0,vc,uc);m.castShadow=mat!==MGlass;m.receiveShadow=true;g.add(m);return m;};
+ add(o.a,o.a+fw,o.y0,o.y1,MF);add(o.b-fw,o.b,o.y0,o.y1,MF);add(o.a,o.b,o.y0,o.y0+fw,MF);add(o.a,o.b,o.y1-fw,o.y1,MF);
+ if(kind==='door'){add(o.a+fw,o.b-fw,o.y0+fw,o.y1-fw,MDoor,.06);const h=add(o.b-.25,o.b-.2,cy-.4-cy+cy,cy+.4,MSteel,.14);}
+ else{const n=kind==='big'?3:(w>2.2?2:1);for(let i=1;i<n;i++){const x=o.a+w*i/n;add(x-fw/2,x+fw/2,o.y0,o.y1,MF);}add(o.a+fw,o.b-fw,o.y0+fw,o.y1-fw,MGlass,.02);}
+ if(dir==='x')g.position.set(cx,cy,c);else g.position.set(c,cy,cx);return g;}
+{let k=0;const plane={N:-4.4,S:4.4,W:-6.88,E:6.88};
+ WALLS.forEach(w=>OPEN[w.k].forEach((o,j)=>{const kind=w.k==='S'?(j===0?'big':'door'):'win';
+  reg(win(w.dir,plane[w.k],o,kind),{info:kind==='big'?'hs':kind==='door'?'drzwi':'okna',s:8,t0:k*.1,t1:k*.1+.3,anim:'pop'});k++;}));}
+
+/* ── 9: flat roof ── */
+[[-7.15,7.15,-4.65,-4.4],[-7.15,7.15,6.9,7.15],[-7.15,-6.9,-4.4,6.9],[6.9,7.15,-4.4,6.9]].forEach(([x0,x1,z0,z1])=>reg(box(x0,x1,2.7,3.2,z0,z1,MAT.concrete),{info:'attyka',s:9,t0:0,t1:.3,anim:'grow',roof:true}));
+[[-4.4,-.6],[-.6,3.2],[3.2,6.9]].forEach(([z0,z1],i)=>reg(box(-6.9,6.9,2.7,2.88,z0,z1,MAT.pir),{info:'pir',s:9,t0:.25+i*.08,t1:.45+i*.08,anim:'drop',roof:true}));
+reg(box(-6.9,6.9,2.88,2.9,-4.4,6.9,MAT.membrane),{info:'membr',s:9,t0:.58,t1:.72,anim:'grow',roof:true});
+reg(box(-6.8,6.8,2.9,2.99,-4.3,6.8,MAT.sedum),{info:'zielony',s:9,t0:.72,t1:1,anim:'grow',roof:true});
+
+/* ── 10: architectural concrete facade ── */
+{const F=(d,t,a,y0,y1,ops,ly0,ly1)=>regSegs(segs(d,t[0],t[1],a[0],a[1],y0,y1,ops,MAT.board),{info:'elew',s:10,t0:0,t1:.85,anim:'rise',ly0,ly1});
+ F('x',[-4.73,-4.65],[-7.23,7.23],0,3.2,OPEN.N,0,3.2);
+ F('z',[-7.23,-7.15],[-4.73,4.73],0,3.2,OPEN.W,0,3.2);
+ F('z',[7.15,7.23],[-4.73,4.73],0,3.2,OPEN.E,0,3.2);
+ F('x',[4.65,4.73],[-7.15,7.15],-.8,2.32,OPEN.S,-.8,2.32);
+ [['z',[-7.23,-7.15],[4.73,7.23]],['z',[7.15,7.23],[4.73,7.23]],['x',[7.15,7.23],[-7.23,7.23]]].forEach(([d,t,a])=>
+  regSegs(segs(d,t[0],t[1],a[0],a[1],2.32,3.2,[],MAT.board),{info:'elew',s:10,t0:.55,t1:.85,anim:'rise',ly0:2.32,ly1:3.2,roof:true}));
+ const RV={N:['x',[-4.73,-4.5]],S:['x',[4.5,4.73]],W:['z',[-7.23,-7]],E:['z',[7,7.23]]},e=.035;
+ Object.entries(RV).forEach(([k,[d,t]])=>OPEN[k].forEach(o=>{const parts=[[o.a,o.a+e,o.y0,o.y1],[o.b-e,o.b,o.y0,o.y1],[o.a,o.b,o.y1-e,o.y1]];if(o.y0>-.7)parts.push([o.a,o.b,o.y0,o.y0+e]);
+  parts.forEach(([a0,a1,y0,y1])=>reg(d==='x'?box(a0,a1,y0,y1,t[0],t[1],MAT.board):box(t[0],t[1],y0,y1,a0,a1,MAT.board),{info:'elew',s:10,t0:.8,t1:.95,anim:'grow'}));}));
+ reg(box(-7.15,7.15,2.32,2.4,4.73,7.15,MAT.board),{info:'sofit',s:10,t0:.82,t1:1,anim:'grow',roof:true});}
+
+/* ── 11: services + interiors ── */
+{const hp=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(.42,.9,1.15),C(0xdcdcd9,{roughness:.5,metalness:.2}));body.position.y=.55;body.castShadow=true;hp.add(body);
+ const ft=makeTex('fan',256,false);const face=new THREE.Mesh(new THREE.PlaneGeometry(1.15,.9),new THREE.MeshStandardMaterial({map:ft,roughness:.5,metalness:.2}));face.rotation.y=-Math.PI/2;face.position.set(-.215,.55,0);hp.add(face);
+ [-.4,.4].forEach(z=>{const f=new THREE.Mesh(new THREE.BoxGeometry(.5,.1,.08),MDark);f.position.set(0,.05,z);hp.add(f);});
+ hp.position.set(-8.0,0,2.3);reg(hp,{info:'pompa',s:11,t0:0,t1:.2,anim:'drop'});
+ [[2.6,-3],[3.4,-3]].forEach(([x,z],i)=>{const v=new THREE.Group();const c=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,.7,20),MSteel);c.position.y=.35;const cap=new THREE.Mesh(new THREE.CylinderGeometry(.22,.16,.12,20),MSteel);cap.position.y=.78;v.add(c,cap);v.traverse(o=>o.castShadow=true);v.position.set(x,2.99,z);
+  reg(v,{info:'reku',s:11,t0:.08+i*.05,t1:.28+i*.05,anim:'grow',roof:true});});
+ const lamps=new THREE.Group();const LP=[[-5.2,-2.6],[-5.2,2.4],[-1.5,2.4],[2,1.2],[3,-2.7],[5.6,2.2],[-.5,-2]];
+ LP.forEach(([x,z])=>lamps.add(box(x-.35,x+.35,2.34,2.38,z-.35,z+.35,MLamp,false)));
+ reg(lamps,{info:'smart',s:11,t0:.18,t1:.22,anim:'grow'});
+ const pls=[[-4.5,0],[0,1.5],[3.5,-1.5]].map(([x,z])=>{const l=new THREE.PointLight(0xffc98a,0,11,2);l.position.set(x,2.0,z);scene.add(l);return l;});
+ reg(new THREE.Object3D(),{custom:(P)=>{const on=ease(prog(P,11,.2,.45));MLamp.emissiveIntensity=on*3;pls.forEach(l=>l.intensity=on*14);}});
+ reg(box(-6.75,6.75,-.8,-.75,-4.25,4.25,MAT.floor),{info:'posadzka',s:11,t0:.28,t1:.42,anim:'grow'});
+ [[-3.62,-3.5,-4.25,.5],[-6.75,-4.6,.38,.5]].forEach(([x0,x1,z0,z1])=>reg(box(x0,x1,-.75,2.4,z0,z1,MWhite),{info:'dzialowe',s:11,t0:.4,t1:.58,anim:'grow'}));
+ reg(grp([box(.5,5.5,-.75,.15,-4.25,-3.65,MSteel),box(1.5,4.2,-.75,.17,-2.2,-1.3,MSteel)]),{info:'kuchnia',s:11,t0:.55,t1:.72,anim:'drop'});
+ reg(grp([box(-6.75,-5,-.75,1.4,-1.62,-1.58,MGlass,false),box(-5.02,-4.98,-.75,1.4,-1.62,-3.2,MGlass,false),box(-6.5,-5.2,-.75,-.25,-4.1,-3.4,MWhite)]),{info:'lazienka',s:11,t0:.66,t1:.82,anim:'drop'});
+ reg(grp([box(-2.2,.4,-.75,-.32,1.9,2.8,MFabric),box(-2.2,.4,-.75,.05,2.62,2.8,MFabric),box(.9,2.9,-.06,0,.4,1.4,MAT.deck),box(1.75,2.05,-.75,-.06,.75,1.05,MSteel),box(-6.4,-4.6,-.75,-.3,1.2,3.4,MWhite),box(-6.4,-4.6,-.75,.2,1.2,1.35,MFabric)]),{info:'meble',s:11,t0:.78,t1:1,anim:'drop'});}
+
+/* ── 12: landscape ── */
+[[-8.5,-7.23,-6,8.5],[7.23,8.5,-6,8.5],[-7.23,7.23,-6,-4.73]].forEach(([x0,x1,z0,z1])=>reg(box(x0,x1,0,.03,z0,z1,MAT.grass),{info:'zielen',s:12,t0:0,t1:.2,anim:'grow'}));
+reg(berm(MAT.grass,.04),{info:'zielen',s:12,t0:.05,t1:.25,anim:'grow'});
+reg(box(-6.95,5,-.8,-.74,4.73,8.2,MAT.deck),{info:'taras',s:12,t0:.15,t1:.4,anim:'grow'});
+for(let k=0;k<4;k++)reg(box(5,6.95,-.8,-.6+.2*k,6.6+.475*k,8.5,MAT.board),{info:'schody',s:12,t0:.3+k*.04,t1:.42+k*.04,anim:'grow'});
+reg(box(5,6.95,0,.03,8.5,19,MAT.gravel),{info:'sciezka',s:12,t0:.45,t1:.6,anim:'grow'});
+{const blade=new THREE.ConeGeometry(.03,1,4);blade.translate(0,.5,0);const spots=[];
+ while(spots.length<55){const x=R(-20,20),z=R(-14,20);if(x>-10&&x<10&&z>-7&&z<10)continue;if(x>4&&x<8&&z>8)continue;spots.push([x,z]);}
+ [[-8,9.4],[-6,9.6],[-3.5,9.3],[8.9,6],[9.2,3.5],[-9.2,5.5],[9,-3],[-9,-2.5],[2,9.4],[0,9.8]].forEach(s=>spots.push(s));
+ const per=16,im=new THREE.InstancedMesh(blade,new THREE.MeshStandardMaterial({roughness:.9}),spots.length*per);const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),e=new THREE.Euler(),col=new THREE.Color();let i=0;
+ spots.forEach(([x,z])=>{const hgt=R(.7,1.25);for(let k=0;k<per;k++){e.set(R(-.45,.45),R(0,6.3),R(-.45,.45));q.setFromEuler(e);m4.compose(new THREE.Vector3(x+R(-.18,.18),0,z+R(-.18,.18)),q,new THREE.Vector3(1,hgt*R(.7,1.1),1));im.setMatrixAt(i,m4);col.setHSL(R(.09,.14),R(.35,.55),R(.48,.66));im.setColorAt(i,col);i++;}});
+ im.castShadow=true;im.frustumCulled=false;reg(im,{info:'zielen',s:12,t0:.55,t1:.85,anim:'grow'});
+ const trunkM=C(0x6b5440,{roughness:.9}),leafM=new THREE.MeshStandardMaterial({color:0x6b8442,roughness:.9,flatShading:true});
+ [[-13,11,1.1],[22,3,1.3],[-15,-9,1.2],[12,-11,1],[-19,3,1.4]].forEach(([x,z,s],j)=>{const t=new THREE.Group();const tr=new THREE.Mesh(new THREE.CylinderGeometry(.1*s,.16*s,2.4*s,8),trunkM);tr.position.y=1.2*s;const cn=new THREE.Mesh(new THREE.IcosahedronGeometry(1.5*s,1),leafM);cn.position.y=3*s;cn.scale.y=1.15;const c2=new THREE.Mesh(new THREE.IcosahedronGeometry(1.05*s,1),leafM);c2.position.set(.7*s,2.5*s,.3*s);t.add(tr,cn,c2);t.traverse(o=>{o.castShadow=true;o.receiveShadow=true;});t.position.set(x,0,z);
+  reg(t,{info:'drzewa',s:12,t0:.65+j*.05,t1:.85+j*.03,anim:'grow'});});}
+
+/* ───────────────────────── STATE / UPDATE ───────────────────────── */
+let P=0,target=null,playing=true,cut=false,scrubbing=false,shownStage=-1,selKey=null;
+const DUR=5.2;
+
+function applyAll(){
+ for(const it of items){
+  if(it.custom){it.custom(P,it);continue;}
+  const o=it.obj,b=o.userData.base,bs=o.userData.bs;o.position.copy(b);o.scale.copy(bs);
+  const f=it.anim==='none'?1:ease(prog(P,it.s,it.t0,it.t1));
+  const g=it.ranim?ease(prog(P,it.rs,it.rt0,it.rt1)):0;
+  let vis=f>5e-4&&!(it.ranim&&g>=.999)&&!(it.ranim==='hide'&&g>0);
+  if(it.roof&&cut)vis=false;
+  if(vis){switch(it.anim){
+   case'grow':o.scale.y=bs.y*Math.max(f,.002);break;
+   case'drop':o.position.y=b.y+(1-f)*7;break;
+   case'pop':o.scale.copy(bs).multiplyScalar(Math.max(f,.002));break;
+   case'rise':{const L=it.ly0+f*(it.ly1-it.ly0);if(L<=it.py0+1e-4)vis=false;else o.scale.y=bs.y*Math.min(1,(L-it.py0)/(it.py1-it.py0));}}
+   if(vis&&it.ranim==='lift')o.position.y+=g*7;
+   if(vis&&it.ranim==='shrink')o.scale.y*=Math.max(1-g,.002);}
+  o.visible=vis;}}
+
+/* camera fly */
+let fly=null;
+function flyTo(st,dur=1.7){const [p,t]=st.cam;const tv=new THREE.Vector3(...t);let pv=new THREE.Vector3(...p);const asp=camera.aspect;if(asp<1.2){pv.sub(tv).multiplyScalar(1+(1.2-asp)*1.1).add(tv);}
+ fly={p0:camera.position.clone(),t0:controls.target.clone(),p1:pv,t1:tv,k:0,dur};}
+controls.addEventListener('start',()=>{fly=null;});
+
+/* ───────────────────────── UI ───────────────────────── */
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,'0');
+const ICON_PLAY='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',ICON_PAUSE='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
+const updPlay=()=>{$('play').innerHTML=playing?ICON_PAUSE:ICON_PLAY;};
+const updCut=()=>{$('cut').classList.toggle('on',cut);$('cutflag').style.display=cut?'block':'none';};
+
+const tl=$('tl');STAGES.forEach((s,i)=>{const b=document.createElement('button');b.className='step';b.innerHTML=`<span class="n">${i+1}</span><span class="l">${s.short}</span>`;b.onclick=()=>goStage(i);tl.appendChild(b);});
+const stepEls=[...tl.querySelectorAll('.step')];
+const phEl=$('phases');PHASES.forEach((p,i)=>{const d=document.createElement('button');d.className='ph';d.innerHTML=`<div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${p.icon}</svg></div><h3>${p.name}: ${p.title.charAt(0).toLowerCase()+p.title.slice(1)}</h3><p>${p.text}</p><span class="link">Zobacz →</span>`;d.onclick=()=>{goStage(p.first);viewer.scrollIntoView({behavior:'smooth',block:'center'});};phEl.appendChild(d);});
+const phEls=[...phEl.children];
+
+function renderPanel(s){const st=STAGES[s];
+ $('pEyebrow').textContent=`Etap ${pad(s+1)} z ${N} · ${PHASES[st.ph].name}`;$('pTitle').textContent=st.title;$('pDesc').textContent=st.desc;
+ $('hdrN').textContent=pad(s+1);$('badge').innerHTML=`${PHASES[st.ph].name}<small>${st.title}</small>`;
+ const ch=$('chips');ch.innerHTML='';Object.entries(INFO).filter(([k,v])=>v.s===s).forEach(([k,v])=>{const b=document.createElement('button');b.className='chip'+(k===selKey?' on':'');b.textContent=v.n;b.dataset.k=k;b.onclick=()=>select(k);ch.appendChild(b);});
+ stepEls.forEach((e,i)=>{e.classList.toggle('cur',i===s);e.classList.toggle('past',i<s);});
+ phEls.forEach((e,i)=>e.classList.toggle('on',i===st.ph));}
+
+/* highlight + selection */
+const hlCache=new Map();
+function hlMat(m){if(Array.isArray(m))return m.map(hlMat);if(hlCache.has(m))return hlCache.get(m);const c=m.clone();
+ if(c.emissive){c.emissive=new THREE.Color(0xad6d2f);c.emissiveIntensity=.5;}else if(c.color)c.color=new THREE.Color(0xe08a35);hlCache.set(m,c);return c;}
+let hlObjs=[];
+function setHL(key){hlObjs.forEach(o=>{o.material=o.userData.orig;});hlObjs=[];if(!key)return;
+ scene.traverse(o=>{if((o.isMesh||o.isLineSegments)&&o.userData.info===key){o.userData.orig=o.material;o.material=hlMat(o.material);hlObjs.push(o);}});}
+function select(k){selKey=k;setHL(k);document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.k===k));
+ if(!k){$('sel').classList.remove('show');return;}const v=INFO[k];$('sName').textContent=v.n;$('sStage').textContent=`Etap ${pad(v.s+1)} · ${STAGES[v.s].title}`;$('sText').textContent=v.t;
+ $('sGo').style.display=v.s===shownStage?'none':'inline-block';$('sel').classList.remove('show');void $('sel').offsetWidth;$('sel').classList.add('show');}
+$('sX').onclick=()=>select(null);
+$('sGo').onclick=()=>{if(selKey)goStage(INFO[selKey].s);};
+
+function syncStage(){const s=clamp(Math.ceil(P-1e-6)-1,0,N-1);
+ if(s!==shownStage){shownStage=s;renderPanel(s);const st=STAGES[s];if(st.cut!==undefined){cut=st.cut;updCut();}if(!scrubbing)flyTo(st);if(selKey)$('sGo').style.display=INFO[selKey].s===s?'none':'inline-block';}
+ $('done').classList.toggle('show',P>=N-.001);
+ $('tlFill').style.width=`calc((100% - 78px) * ${clamp(P/(N-1)>1?1:(P-.5)/(N-1),0,1)})`;}
+
+function goStage(i){i=clamp(i,0,N-1);P=i+1e-4;target=i+1;playing=false;updPlay();shownStage=-1;}
+$('play').onclick=()=>{if(playing){playing=false;}else{if(P>=N-1e-3){P=1e-4;shownStage=-1;}playing=true;target=null;}updPlay();};
+$('next').onclick=()=>goStage(shownStage+1);
+$('prev').onclick=()=>goStage(shownStage-1);
+$('cut').onclick=()=>{cut=!cut;updCut();};
+$('reset').onclick=()=>flyTo(STAGES[shownStage]);
+const scrub=$('scrub');
+scrub.addEventListener('input',()=>{scrubbing=true;playing=false;target=null;P=+scrub.value;updPlay();});
+scrub.addEventListener('change',()=>{scrubbing=false;});
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;if(e.key==='ArrowRight')$('next').click();else if(e.key==='ArrowLeft')$('prev').click();else if(e.key===' '){e.preventDefault();$('play').click();}});
+
+/* picking */
+const ray=new THREE.Raycaster();ray.params.Line.threshold=.12;const ndc=new THREE.Vector2();
+function pick(x,y){const r=canvas.getBoundingClientRect();ndc.set((x-r.left)/r.width*2-1,-(y-r.top)/r.height*2+1);ray.setFromCamera(ndc,camera);
+ const hits=ray.intersectObjects(scene.children,true);
+ for(const h of hits){let ok=true;for(let q=h.object;q;q=q.parent)if(!q.visible){ok=false;break;}if(!ok)continue;return h.object.userData.info||null;}return null;}
+let down=null;const tip=$('tip');
+canvas.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY};});
+canvas.addEventListener('pointerup',e=>{if(!down)return;const moved=Math.hypot(e.clientX-down.x,e.clientY-down.y);down=null;if(moved>5)return;const k=pick(e.clientX,e.clientY);select(k);});
+let hoverQ=null;canvas.addEventListener('pointermove',e=>{if(e.pointerType!=='mouse')return;hoverQ={x:e.clientX,y:e.clientY};});
+canvas.addEventListener('pointerleave',()=>{hoverQ=null;tip.style.display='none';canvas.classList.remove('pointer');});
+function doHover(){if(!hoverQ||down)return;const {x,y}=hoverQ;hoverQ=null;const k=pick(x,y);const r=viewer.getBoundingClientRect();
+ if(k){tip.textContent=INFO[k].n;tip.style.left=(x-r.left)+'px';tip.style.top=(y-r.top)+'px';tip.style.display='block';canvas.classList.add('pointer');}
+ else{tip.style.display='none';canvas.classList.remove('pointer');}}
+
+/* resize */
+function resize(){const w=viewer.clientWidth,h=viewer.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+new ResizeObserver(resize).observe(viewer);resize();
+
+/* loop */
+const clock=new THREE.Clock();let first=true;
+function loop(){const dt=Math.min(clock.getDelta(),.05);
+ if(playing){P+=dt/DUR;if(P>=N){P=N;playing=false;updPlay();}}
+ else if(target!==null){const d=target-P,step=dt/DUR*1.25;if(Math.abs(d)<=step){P=target;target=null;}else P+=Math.sign(d)*step;}
+ syncStage();if(!scrubbing)scrub.value=P;
+ applyAll();
+ if(fly){fly.k=Math.min(1,fly.k+dt/fly.dur);const e=ease(fly.k);camera.position.lerpVectors(fly.p0,fly.p1,e);controls.target.lerpVectors(fly.t0,fly.t1,e);if(fly.k>=1)fly=null;}
+ controls.update();doHover();renderer.render(scene,camera);
+ if(first){first=false;const l=$('loader');l.style.opacity=0;setTimeout(()=>l.remove(),600);}
+ requestAnimationFrame(loop);}
+updPlay();updCut();loop();
+window.__bk={jump(p){playing=false;target=null;P=p;},cam(){const s=STAGES[shownStage];fly=null;flyTo(s,0.001);}};
+</script>
+</body>
+</html>

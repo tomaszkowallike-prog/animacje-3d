@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shock Watch — Teardown</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b0c0e;overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#d7dbe0}
+  body{background:radial-gradient(ellipse at 50% 40%,#23272d 0%,#101215 55%,#08090a 100%)}
+  canvas{display:block}
+  #hud{position:fixed;left:20px;top:18px;pointer-events:none}
+  #hud h1{margin:0;font-size:13px;letter-spacing:.28em;font-weight:700;color:#fff}
+  #hud .sub{font-size:11px;color:#8a929c;margin-top:6px;letter-spacing:.06em}
+  #phase{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);font-size:13px;letter-spacing:.12em;color:#e8ecef;text-transform:uppercase;white-space:nowrap;text-shadow:0 1px 8px #000}
+  #phase b{color:#ff4a3d;font-weight:700;margin-right:10px}
+  #bar{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);display:flex;gap:10px;align-items:center;background:rgba(20,22,26,.78);border:1px solid #2c3038;border-radius:10px;padding:8px 12px;backdrop-filter:blur(6px)}
+  #bar button{background:#2a2e35;color:#e5e8eb;border:1px solid #3a3f48;border-radius:6px;font:inherit;font-size:12px;padding:5px 10px;cursor:pointer}
+  #bar button:hover{background:#353a43}
+  #bar button.on{background:#ff4a3d;border-color:#ff4a3d;color:#fff}
+  #scrub{width:min(38vw,360px);accent-color:#ff4a3d}
+  #tip{position:fixed;pointer-events:none;background:#000c;border:1px solid #444;color:#fff;font-size:11px;padding:4px 8px;border-radius:4px;display:none;white-space:nowrap}
+  #stats{position:fixed;right:20px;top:18px;text-align:right;font-size:11px;color:#8a929c;line-height:1.7;pointer-events:none}
+  #stats span{color:#fff}
+  @media (max-width:640px){#phase{font-size:11px;bottom:84px}#scrub{width:34vw}#stats{display:none}}
+</style>
+</head>
+<body>
+<div id="hud"><h1>SHOCK-RESIST // TEARDOWN</h1><div class="sub">drag to orbit · scroll to zoom · hover a part</div></div>
+<div id="stats">parts <span id="pc">0</span><br>model files <span>0</span><br>image textures <span>0</span><br>local time <span id="lt">--:--</span></div>
+<div id="phase"><b>01</b>assembled</div>
+<div id="bar">
+  <button id="play" class="on">❚❚</button>
+  <input id="scrub" type="range" min="0" max="1000" value="0">
+  <button data-s="0.5">½×</button><button data-s="1" class="on">1×</button><button data-s="2">2×</button>
+</div>
+<div id="tip"></div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const PI = Math.PI, TAU = PI * 2;
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const ease = x => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const ramp = (t, a, b) => ease((t - a) / (b - a));
+
+/* ---------------- renderer / scene ---------------- */
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 1, 2000);
+camera.position.set(0, 18, 100);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.enableZoom = false; controls.enablePan = false;
+let userZoom = 1;
+renderer.domElement.addEventListener('wheel', e => { e.preventDefault(); userZoom = clamp(userZoom * (1 + e.deltaY * 0.001), 0.45, 2.2); }, { passive: false });
+
+const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(40, 60, 80); scene.add(key);
+const rim = new THREE.DirectionalLight(0x9fc4ff, 1.0); rim.position.set(-70, 20, -60); scene.add(rim);
+scene.add(new THREE.AmbientLight(0xffffff, 0.15));
+
+const pivot = new THREE.Group(); scene.add(pivot);       // tilt (x)
+const spin = new THREE.Group(); pivot.add(spin);         // turn (y)
+const watch = new THREE.Group(); spin.add(watch);        // re-centres when exploded
+
+/* ---------------- materials ---------------- */
+const M = {
+  resin: new THREE.MeshStandardMaterial({ color: 0x17181a, roughness: 0.62, metalness: 0 }),
+  resinGloss: new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.35 }),
+  strap: new THREE.MeshStandardMaterial({ color: 0x151618, roughness: 0.7, side: THREE.DoubleSide }),
+  steel: new THREE.MeshStandardMaterial({ color: 0xd9dcdf, roughness: 0.26, metalness: 1 }),
+  darkSteel: new THREE.MeshStandardMaterial({ color: 0x6d7177, roughness: 0.35, metalness: 1 }),
+  brass: new THREE.MeshStandardMaterial({ color: 0xd0a457, roughness: 0.32, metalness: 1 }),
+  copper: new THREE.MeshStandardMaterial({ color: 0xc7713c, roughness: 0.35, metalness: 1 }),
+  ceramic: new THREE.MeshStandardMaterial({ color: 0xece8dc, roughness: 0.55 }),
+  blob: new THREE.MeshStandardMaterial({ color: 0x0b0b0c, roughness: 0.18 }),
+  tan: new THREE.MeshStandardMaterial({ color: 0xb48a5a, roughness: 0.5 }),
+  smdBlack: new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.4 }),
+  rubber: new THREE.MeshStandardMaterial({ color: 0x0d0d0e, roughness: 0.85 }),
+  zebra: new THREE.MeshStandardMaterial({ color: 0xc9a9ad, roughness: 0.8 }),
+  plastic: new THREE.MeshStandardMaterial({ color: 0x26282c, roughness: 0.5 }),
+  white: new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.4 }),
+  led: new THREE.MeshStandardMaterial({ color: 0xffe9a8, roughness: 0.1, emissive: 0x000000 }),
+  hole: new THREE.MeshBasicMaterial({ color: 0x050505 }),
+  glass: new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.02, metalness: 0, transparent: true, opacity: 0.16, clearcoat: 1, depthWrite: false }),
+  red: new THREE.MeshStandardMaterial({ color: 0xd8261c, roughness: 0.45 }),
+};
+
+/* ---------------- helpers ---------------- */
+function canvasTex(w, h, draw) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'); draw(g, w, h);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  t.userData.ctx = g; t.userData.canvas = c; return t;
+}
+function rrPath(P, w, h, r, cx = 0, cy = 0) {
+  const x = cx - w / 2, y = cy - h / 2;
+  P.moveTo(x + r, y); P.lineTo(x + w - r, y); P.absarc(x + w - r, y + r, r, -PI / 2, 0, false);
+  P.lineTo(x + w, y + h - r); P.absarc(x + w - r, y + h - r, r, 0, PI / 2, false);
+  P.lineTo(x + r, y + h); P.absarc(x + r, y + h - r, r, PI / 2, PI, false);
+  P.lineTo(x, y + r); P.absarc(x + r, y + r, r, PI, 1.5 * PI, false);
+  return P;
+}
+const rrShape = (w, h, r, cx, cy) => rrPath(new THREE.Shape(), w, h, r, cx, cy);
+const rrHole = (w, h, r, cx, cy) => rrPath(new THREE.Path(), w, h, r, cx, cy);
+function extrude(shape, depth, z0, bevel = 0, curve = 24) {
+  const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: curve });
+  g.translate(0, 0, z0); return g;
+}
+// planar UV mapping for extrude caps: shape coords -> [0,1]
+function capTex(tex, W, H) { tex.repeat.set(1 / W, 1 / H); tex.offset.set(0.5, 0.5); tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; return tex; }
+function mesh(geo, mat, parent, x = 0, y = 0, z = 0) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); if (parent) parent.add(m); return m; }
+
+/* helical screw thread — real helix, profile r(z - p·θ/2π) */
+function threadGeo(rMin, rMaj, pitch, len, nA = 44, perPitch = 16) {
+  const nZ = Math.ceil(len / pitch * perPitch), pos = [], idx = [];
+  for (let i = 0; i <= nZ; i++) {
+    const z = len * i / nZ;
+    for (let j = 0; j <= nA; j++) {
+      const a = TAU * j / nA;
+      let ph = ((z / pitch - j / nA) % 1 + 1) % 1;
+      let f = ph < .5 ? ph * 2 : 2 - ph * 2;           // triangular tooth
+      f = clamp((f - 0.12) / 0.76);                     // flat crest + root
+      let r = rMin + (rMaj - rMin) * f;
+      const tip = len - z; if (tip < pitch) r = Math.min(r, rMin * 0.8 + (rMaj - rMin * 0.8) * tip / pitch);
+      pos.push(r * Math.cos(a), r * Math.sin(a), -z);
+    }
+  }
+  for (let i = 0; i < nZ; i++) for (let j = 0; j < nA; j++) {
+    const a = i * (nA + 1) + j, b = a + nA + 1;
+    idx.push(a, a + 1, b, b, a + 1, b + 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+class Helix extends THREE.Curve {
+  constructor(r, len, turns) { super(); this.r = r; this.len = len; this.turns = turns; }
+  getPoint(t, o = new THREE.Vector3()) { const a = TAU * this.turns * t; return o.set(this.r * Math.cos(a), this.r * Math.sin(a), this.len * t); }
+}
+function loopTube(w, h, r, tube, segs = 160) {
+  const pts = rrShape(w, h, r).getSpacedPoints(segs).map(p => new THREE.Vector3(p.x, p.y, 0));
+  pts.pop();
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), segs, tube, 10, true);
+}
+
+/* ---------------- part registry ---------------- */
+const parts = [];
+function part(name, offset, order, opts = {}) {
+  const g = new THREE.Group(); g.userData.partName = name;
+  watch.add(g);
+  parts.push({ g, name, off: new THREE.Vector3(offset[0], offset[1], offset[2] * 1.3), order, ...opts });
+  return g;
+}
+
+/* ================= TEXTURES (all drawn in code) ================= */
+// 7-segment glyph engine
+const SEG = ['abcdef', 'bc', 'abged', 'abgcd', 'fgbc', 'afgcd', 'afgedc', 'abc', 'abcdefg', 'abcdfg'];
+function seg7(g, d, x, y, w, h, t, on, ghost) {
+  const sk = 0.12 * h, gap = t * 0.18;
+  const P = (px, py) => [x + px + sk * (1 - py / h), y + py];
+  const hs = (x0, x1, yy) => [P(x0 + gap, yy), P(x0 + gap + t / 2, yy - t / 2), P(x1 - gap - t / 2, yy - t / 2), P(x1 - gap, yy), P(x1 - gap - t / 2, yy + t / 2), P(x0 + gap + t / 2, yy + t / 2)];
+  const vs = (xx, y0, y1) => [P(xx, y0 + gap), P(xx + t / 2, y0 + gap + t / 2), P(xx + t / 2, y1 - gap - t / 2), P(xx, y1 - gap), P(xx - t / 2, y1 - gap - t / 2), P(xx - t / 2, y0 + gap + t / 2)];
+  const S = { a: hs(0, w, 0), g: hs(0, w, h / 2), d: hs(0, w, h), f: vs(0, 0, h / 2), b: vs(w, 0, h / 2), e: vs(0, h / 2, h), c: vs(w, h / 2, h) };
+  const lit = d == null ? '' : SEG[d];
+  for (const k in S) {
+    const isOn = lit.includes(k);
+    g.fillStyle = isOn ? on : ghost; g.beginPath();
+    S[k].forEach(([px, py], i) => i ? g.lineTo(px, py) : g.moveTo(px, py)); g.closePath(); g.fill();
+  }
+}
+const lcdTex = canvasTex(960, 680, () => {});
+const DAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+let lcdKey = '';
+function drawLCD(glow) {
+  const now = new Date();
+  const k = now.getSeconds() + '|' + glow.toFixed(2);
+  if (k === lcdKey) return; lcdKey = k;
+  const g = lcdTex.userData.ctx, W = 960, H = 680;
+  const bg = g.createLinearGradient(0, 0, 0, H);
+  const mix = (a, b) => a.map((v, i) => Math.round(v + (b[i] - v) * glow));
+  const c1 = mix([186, 194, 168], [118, 222, 205]), c2 = mix([160, 170, 145], [70, 190, 178]);
+  bg.addColorStop(0, `rgb(${c1})`); bg.addColorStop(1, `rgb(${c2})`);
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  const ON = '#1b1f17', GH = 'rgba(30,40,20,0.07)';
+  // frame lines
+  g.strokeStyle = 'rgba(20,25,15,.55)'; g.lineWidth = 5; g.strokeRect(22, 22, W - 44, H - 44);
+  g.beginPath(); g.moveTo(22, 220); g.lineTo(W - 22, 220); g.stroke();
+  // top row: day + date
+  g.fillStyle = ON; g.font = 'bold 118px Arial, Helvetica, sans-serif'; g.textBaseline = 'alphabetic';
+  g.save(); g.translate(70, 180); g.transform(1, 0, -0.12, 1, 0, 0); g.fillText(DAYS[now.getDay()], 0, 0); g.restore();
+  const mo = now.getMonth() + 1, da = now.getDate();
+  const sx = 470, sw = 70, sh = 120, st = 17;
+  seg7(g, mo >= 10 ? 1 : null, sx, 52, sw, sh, st, ON, GH);
+  seg7(g, mo % 10, sx + 100, 52, sw, sh, st, ON, GH);
+  g.fillStyle = ON; g.fillRect(sx + 205, 108, 34, 14);
+  seg7(g, da >= 10 ? Math.floor(da / 10) : null, sx + 260, 52, sw, sh, st, ON, GH);
+  seg7(g, da % 10, sx + 360, 52, sw, sh, st, ON, GH);
+  // main time
+  const hh = now.getHours(), mm = now.getMinutes(), ss = now.getSeconds();
+  const y = 270, dw = 128, dh = 300, dt = 34;
+  seg7(g, hh >= 10 ? Math.floor(hh / 10) : null, 60, y, dw, dh, dt, ON, GH);
+  seg7(g, hh % 10, 240, y, dw, dh, dt, ON, GH);
+  g.fillStyle = (ss % 2 === 0) ? ON : GH;
+  g.fillRect(418, y + 80, 30, 30); g.fillRect(404, y + 200, 30, 30);
+  seg7(g, Math.floor(mm / 10), 480, y, dw, dh, dt, ON, GH);
+  seg7(g, mm % 10, 660, y, dw, dh, dt, ON, GH);
+  // seconds (small)
+  seg7(g, Math.floor(ss / 10), 808, y + 150, 40, 140, 14, ON, GH);
+  seg7(g, ss % 10, 866, y + 150, 40, 140, 14, ON, GH);
+  g.fillStyle = ON; g.font = 'bold 34px Arial, sans-serif'; g.fillText('24H', 818, y + 110);
+  // tiny indicator icons
+  g.fillText('♪', 840, 128); g.fillText('ALM', 36, 640);
+  lcdTex.needsUpdate = true;
+  document.getElementById('lt').textContent = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+}
+
+// bezel face — 44 x 50 units
+const BZ = { W: 44, H: 50 };
+const bezelTex = capTex(canvasTex(880, 1000, (g, W, H) => {
+  g.fillStyle = '#18191b'; g.fillRect(0, 0, W, H);
+  // moulded micro-texture
+  for (let i = 0; i < 9000; i++) { g.fillStyle = `rgba(255,255,255,${Math.random() * 0.025})`; g.fillRect(Math.random() * W, Math.random() * H, 2, 2); }
+  const u = W / BZ.W; // px per unit
+  const X = x => (x + BZ.W / 2) * u, Y = y => (BZ.H / 2 - y) * u;
+  // ridges top/bottom
+  g.strokeStyle = 'rgba(255,255,255,.06)'; g.lineWidth = 3;
+  for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(X(-12), Y(17 + i * 1.6)); g.lineTo(X(12), Y(17 + i * 1.6)); g.stroke(); g.beginPath(); g.moveTo(X(-12), Y(-17 - i * 1.6)); g.lineTo(X(12), Y(-17 - i * 1.6)); g.stroke(); }
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = '#f4f4f4'; g.font = 'italic 900 64px "Arial Black", Arial, sans-serif';
+  g.fillText('KRONA', X(0), Y(20.6));
+  g.fillStyle = '#d8261c'; g.font = 'bold 30px Arial, sans-serif'; g.fillText('SHOCK  RESIST', X(0), Y(-20.4));
+  g.fillStyle = '#9aa0a6'; g.font = 'bold 22px Arial, sans-serif'; g.fillText('20 BAR', X(0), Y(-22.9));
+  const side = (txt, x, y, rot, col = '#cfd3d6') => { g.save(); g.translate(X(x), Y(y)); g.rotate(rot); g.fillStyle = col; g.font = 'bold 24px Arial, sans-serif'; g.fillText(txt, 0, 0); g.restore(); };
+  side('ADJUST', -19, 9, -PI / 2); side('MODE', -19, -9, -PI / 2);
+  side('LIGHT', 19, 9, PI / 2, '#f0c640'); side('START·STOP', 19, -9, PI / 2);
+}), BZ.W, BZ.H);
+
+// face plate — 34 x 30
+const FP = { W: 34, H: 30 };
+const faceTex = capTex(canvasTex(1020, 900, (g, W, H) => {
+  const u = W / FP.W, X = x => (x + FP.W / 2) * u, Y = y => (FP.H / 2 - y) * u;
+  g.fillStyle = '#0f1012'; g.fillRect(0, 0, W, H);
+  g.strokeStyle = '#2f6fd6'; g.lineWidth = 6; g.strokeRect(X(-13.1), Y(9.4), 26.2 * u, 18.8 * u);
+  g.strokeStyle = '#d8261c'; g.lineWidth = 3; g.strokeRect(X(-13.8), Y(10.1), 27.6 * u, 20.2 * u);
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = '#c9ced3'; g.font = 'bold 30px Arial, sans-serif'; g.fillText('MULTI ALARM  ·  CHRONOGRAPH', X(0), Y(11.9));
+  g.fillStyle = '#7d848b'; g.font = 'bold 24px Arial, sans-serif'; g.fillText('ILLUMINATOR', X(-7), Y(-11.8)); g.fillText('WR 200M', X(8), Y(-11.8));
+}), FP.W, FP.H);
+
+// case back — 38 x 38 (mirrored: viewed from behind)
+const CB = 38;
+const backTex = capTex(canvasTex(1024, 1024, (g, W, H) => {
+  g.translate(W, 0); g.scale(-1, 1);
+  g.fillStyle = '#b9bdc1'; g.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  for (let r = 4; r < W * 0.75; r += 1.5) { g.strokeStyle = `rgba(${Math.random() < .5 ? '255,255,255' : '40,45,50'},${Math.random() * 0.12})`; g.lineWidth = 1.2; g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.stroke(); }
+  g.strokeStyle = 'rgba(40,44,50,.55)'; g.lineWidth = 4; g.beginPath(); g.arc(cx, cy, 300, 0, TAU); g.stroke(); g.beginPath(); g.arc(cx, cy, 380, 0, TAU); g.stroke();
+  g.fillStyle = 'rgba(35,38,44,.85)'; g.font = 'bold 38px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const ring = 'WATER RESIST 20 BAR  ·  SHOCK RESIST  ·  STAINLESS STEEL BACK  ·  ';
+  const chars = ring.split(''), step = TAU / chars.length;
+  chars.forEach((ch, i) => { g.save(); g.translate(cx, cy); g.rotate(i * step - PI / 2 + PI / 2); g.translate(0, -340); g.fillText(ch, 0, 0); g.restore(); });
+  g.font = 'italic 900 78px "Arial Black", Arial, sans-serif'; g.fillText('KRONA', cx, cy - 70);
+  g.font = 'bold 40px Arial, sans-serif'; g.fillText('MODULE K-5600', cx, cy + 20); g.fillText('BATTERY CR2016', cx, cy + 80);
+  g.font = 'bold 30px Arial, sans-serif'; g.fillText('SERIAL 03 11 26', cx, cy + 150);
+}), CB, CB);
+
+// PCB — 29 x 27, front & back, every trace generated
+const PCB = { W: 29, H: 27 };
+function pcbTex(side) {
+  return canvasTex(1160, 1080, (g, W, H) => {
+    const u = W / PCB.W, X = x => (x + PCB.W / 2) * u, Y = y => (PCB.H / 2 - y) * u;
+    g.fillStyle = '#0d4f2b'; g.fillRect(0, 0, W, H);
+    const rnd = (() => { let s = side === 'front' ? 7 : 31; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+    const trace = (pts, w = 5) => {
+      g.strokeStyle = '#2e8a52'; g.lineWidth = w; g.lineJoin = 'round'; g.lineCap = 'round';
+      g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y))); g.stroke();
+    };
+    const via = (x, y) => { g.fillStyle = '#d6b25e'; g.beginPath(); g.arc(X(x), Y(y), 9, 0, TAU); g.fill(); g.fillStyle = '#1a1a1a'; g.beginPath(); g.arc(X(x), Y(y), 4, 0, TAU); g.fill(); };
+    const pad = (x, y, w, h) => { g.fillStyle = '#e0bd62'; g.fillRect(X(x - w / 2), Y(y + h / 2), w * u, h * u); };
+    // ground pour hatch
+    g.strokeStyle = 'rgba(60,150,90,.18)'; g.lineWidth = 2;
+    for (let i = -H; i < W; i += 22) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + H, H); g.stroke(); }
+    // mounting holes
+    [[-12.5, 11.5], [12.5, -11.5]].forEach(([x, y]) => { g.fillStyle = '#d6b25e'; g.beginPath(); g.arc(X(x), Y(y), 26, 0, TAU); g.fill(); g.fillStyle = '#050505'; g.beginPath(); g.arc(X(x), Y(y), 14, 0, TAU); g.fill(); });
+    if (side === 'front') {
+      // LCD zebra contact rows — 36 fingers top & bottom, each routed with a 45° jog to a via
+      for (const s of [1, -1]) {
+        const n = 36;
+        for (let i = 0; i < n; i++) {
+          const x = -10 + 20 * i / (n - 1), y0 = 7.2 * s;
+          pad(x, y0, 0.32, 1.1);
+          const tx = -11 + 22 * ((i * 7) % n) / n * 0.9 + 1, ty = (1.2 + (i % 6) * 0.75) * s;
+          const y1 = y0 - 1.0 * s, dx = tx - x, jog = Math.min(Math.abs(dx), Math.abs(y1 - ty) - 0.4);
+          const y2 = y1 - jog * s;
+          trace([[x, y0 - 0.55 * s], [x, y1], [x + Math.sign(dx) * jog, y2], [x + Math.sign(dx) * jog, ty]], 3);
+          via(x + Math.sign(dx) * jog, ty);
+        }
+      }
+      // edge buses
+      trace([[-13.5, 12.5], [13.5, 12.5], [13.5, -12.5], [-13.5, -12.5], [-13.5, 12.5]], 9);
+      g.fillStyle = '#f1f1f1'; g.font = 'bold 26px Arial'; g.fillText('K-5600 LCD SIDE  REV.C', X(-12), Y(-9.6));
+      g.fillText('LED1', X(-12.6), Y(9.8));
+    } else {
+      // COB die bond area + radial fan-out to pads
+      const cx = -6.5, cy = 4;
+      for (let i = 0; i < 64; i++) {
+        const a = TAU * i / 64, r0 = 3.9;
+        const x0 = cx + r0 * Math.cos(a), y0 = cy + r0 * Math.sin(a);
+        const r1 = 5 + rnd() * 3.5, x1 = cx + r1 * Math.cos(a), y1 = cy + r1 * Math.sin(a);
+        const ex = clamp(x1 + (rnd() - .5) * 6, -13.5, 13.5), ey = clamp(y1 + (rnd() - .5) * 2, -12.5, 12.5);
+        trace([[x0, y0], [x1, y1], [ex, y1], [ex, ey]], 3);
+        if (rnd() < .45) via(ex, ey); else pad(ex, ey, 0.5, 0.5);
+      }
+      g.strokeStyle = '#e0bd62'; g.lineWidth = 6; g.beginPath(); g.arc(X(cx), Y(cy), 3.9 * u, 0, TAU); g.stroke();
+      // battery contact
+      g.fillStyle = '#e0bd62'; g.beginPath(); g.arc(X(4), Y(-2), 3.2 * u, 0, TAU); g.fill();
+      g.fillStyle = '#c8a24a'; for (let i = 0; i < 8; i++) { g.beginPath(); g.arc(X(4 + 2 * Math.cos(i)), Y(-2 + 2 * Math.sin(i)), 6, 0, TAU); g.fill(); }
+      // crystal & smd pads
+      pad(-9.3, -6, 0.8, 0.9); pad(-6.7, -6, 0.8, 0.9);
+      [[8, 9], [10, 9], [-1, 10.5], [12, 4], [-12, -2], [-11.5, -10], [1, -11.5]].forEach(([x, y]) => { pad(x - .55, y, .45, .6); pad(x + .55, y, .45, .6); });
+      // button contact springs pads
+      [[-13.6, 9], [-13.6, -9], [13.6, 9], [13.6, -9]].forEach(([x, y]) => pad(x, y, 1.2, 2.2));
+      g.fillStyle = '#f1f1f1'; g.font = 'bold 26px Arial'; g.textAlign = 'right';
+      g.fillText('IC1', X(-1.6), Y(8.6)); g.fillText('X1 32.768kHz', X(-4.5), Y(-7.6)); g.fillText('BT1 +', X(13.6), Y(-11));
+    }
+  });
+}
+const pcbFront = pcbTex('front'), pcbBack = pcbTex('back');
+
+const battTex = canvasTex(512, 512, (g, W, H) => {
+  g.fillStyle = '#c9ccd0'; g.fillRect(0, 0, W, H);
+  for (let r = 4; r < 256; r += 2) { g.strokeStyle = `rgba(255,255,255,${Math.random() * .2})`; g.beginPath(); g.arc(256, 256, r, 0, TAU); g.stroke(); }
+  g.translate(W, 0); g.scale(-1, 1);
+  g.fillStyle = '#55595e'; g.textAlign = 'center'; g.font = 'bold 120px Arial'; g.fillText('+', 256, 180);
+  g.font = 'bold 74px Arial'; g.fillText('CR2016', 256, 300); g.font = 'bold 50px Arial'; g.fillText('3V  LITHIUM', 256, 370);
+});
+
+/* ================= BUILD THE WATCH ================= */
+// ---- case body (stays put) ----
+const body = part('Case body (resin, mono-block)', [0, 0, 0], 0);
+{
+  const s = rrShape(38, 40, 6); s.holes.push(rrHole(30, 28, 3));
+  mesh(extrude(s, 9.3, -4.5, 0.3), M.resin, body);
+  // lug ears
+  for (const sy of [1, -1]) for (const sx of [1, -1]) {
+    const lug = mesh(new THREE.BoxGeometry(3, 6, 5), M.resin, body, sx * 12.5, sy * 22.5, -1.5);
+    mesh(new THREE.CylinderGeometry(0.75, 0.75, 3.05, 16).rotateZ(PI / 2), M.hole, body, sx * 12.5, sy * 24, -1.5);
+  }
+  // screw bosses visible when back is off
+  [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([a, b]) => mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.05, 20).rotateX(PI / 2), M.hole, body, a * 15.5, b * 15, -4.82));
+}
+
+// ---- bezel ----
+const bezel = part('Resin bezel (shock-absorbing shell)', [0, 0, 18], 3);
+{
+  const top = rrShape(BZ.W, BZ.H, 11); top.holes.push(rrHole(32, 28, 4));
+  const bm = new THREE.Mesh(extrude(top, 2.2, 5.2, 0.35), [new THREE.MeshStandardMaterial({ map: bezelTex, roughness: 0.6 }), M.resin]);
+  bezel.add(bm);
+  const tb = rrShape(BZ.W, BZ.H, 11); tb.holes.push(rrHole(32, 28, 4));
+  mesh(extrude(tb, 0.02, 4.75), M.resin, bezel); // hides inner face of printed cap
+  const skirt = rrShape(BZ.W, BZ.H, 11); skirt.holes.push(rrHole(40.2, 46.5, 7));
+  mesh(extrude(skirt, 9, -3.8, 0.35), M.resin, bezel);
+  // button guards
+  for (const sx of [1, -1]) for (const sy of [1, -1]) for (const d of [-1, 1]) {
+    mesh(new THREE.BoxGeometry(2.4, 1.6, 6).translate(0, 0, 0), M.resin, bezel, sx * 22.6, sy * 9 + d * 3.2, 1.3);
+  }
+  // raised ribs on bezel top
+  for (const sy of [1, -1]) for (let i = 0; i < 3; i++) mesh(new THREE.BoxGeometry(6, 0.5, 0.5), M.resinGloss, bezel, sy * 0 + (i - 1) * 9, sy * 24.2, 6.4);
+}
+
+// ---- face plate ----
+const face = part('Face plate (printed dial ring)', [0, 0, 6.7], 4);
+{
+  const s = rrShape(FP.W, FP.H, 3); s.holes.push(rrHole(24.6, 17.6, 0.8));
+  mesh(extrude(s, 0.3, 5.2), [new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.45, metalness: 0.2 }), M.plastic], face);
+}
+
+// ---- crystal ----
+const crystal = part('Mineral crystal', [0, 0, 24], 2);
+mesh(extrude(rrShape(31.4, 27.4, 3.5), 0.8, 5.7, 0.15), M.glass, crystal).renderOrder = 10;
+
+// ---- LCD ----
+const lcd = part('LCD cell (STN, 7-segment)', [0, 0, -14.5], 10);
+{
+  const side = new THREE.MeshStandardMaterial({ color: 0x8e9a8f, roughness: 0.2, metalness: 0.1 });
+  const front = new THREE.MeshStandardMaterial({ map: lcdTex, roughness: 0.25, emissiveMap: lcdTex, emissive: 0x000000 });
+  lcd.userData.front = front;
+  mesh(new THREE.BoxGeometry(24, 17, 1), [side, side, side, side, front, side], lcd, 0, 0, 4.55);
+}
+
+// ---- zebra connectors ----
+const zebras = part('Zebra elastomer connectors ×2', [0, 0, -16.5], 9.5);
+for (const s of [1, -1]) {
+  mesh(new THREE.BoxGeometry(20, 0.9, 3.2), M.zebra, zebras, 0, 7.2 * s, 2.4);
+  for (let i = 0; i < 40; i++) mesh(new THREE.BoxGeometry(0.12, 0.92, 3.21), M.smdBlack, zebras, -9.75 + i * 0.5, 7.2 * s, 2.4);
+}
+
+// ---- module frame ----
+const frame = part('Module holder frame', [0, 0, -20.5], 9);
+{
+  const s = rrShape(29, 27, 2.4); s.holes.push(rrHole(23, 16, 0.6));
+  s.holes.push(rrHole(2.4, 2.4, 1.1, -12.2, 10.6));
+  mesh(extrude(s, 3.2, 0.8), M.plastic, frame);
+  // button contact springs (leaf) on frame sides
+  for (const sx of [1, -1]) for (const sy of [1, -1]) mesh(new THREE.BoxGeometry(0.25, 2.4, 2.4), M.steel, frame, sx * 14.65, sy * 9, 2.2);
+}
+
+// ---- PCB + components ----
+const pcb = part('PCB — double-sided, all traces procedural', [0, 0, -23.4], 8);
+{
+  const edge = new THREE.MeshStandardMaterial({ color: 0x1f5a35, roughness: 0.6 });
+  const fm = new THREE.MeshStandardMaterial({ map: pcbFront, roughness: 0.45, metalness: 0.15 });
+  const bm = new THREE.MeshStandardMaterial({ map: pcbBack, roughness: 0.45, metalness: 0.15 });
+  mesh(new THREE.BoxGeometry(PCB.W, PCB.H, 0.8), [edge, edge, edge, edge, fm, bm], pcb, 0, 0, 0.4);
+  // COB epoxy glob (main IC)
+  const blob = mesh(new THREE.SphereGeometry(3.6, 40, 20, 0, TAU, PI / 2, PI / 2), M.blob, pcb, -6.5, 4, 0);
+  blob.rotation.x = -PI / 2; blob.scale.set(1, 1, 0.3); blob.rotation.x = PI / 2; blob.scale.set(1, 0.32, 1);
+  // 32.768 kHz tuning-fork crystal can
+  mesh(new THREE.CylinderGeometry(0.62, 0.62, 3.4, 24).rotateZ(PI / 2), M.steel, pcb, -8, -6, -0.7);
+  mesh(new THREE.SphereGeometry(0.62, 16, 10), M.steel, pcb, -9.7, -6, -0.7);
+  // SMD caps / resistors
+  [[8, 9, 'tan'], [10, 9, 'tan'], [-1, 10.5, 'smdBlack'], [12, 4, 'tan'], [-12, -2, 'smdBlack'], [-11.5, -10, 'tan'], [1, -11.5, 'smdBlack']].forEach(([x, y, m]) => {
+    mesh(new THREE.BoxGeometry(1.6, 0.8, 0.55), M[m], pcb, x, y, -0.27);
+    mesh(new THREE.BoxGeometry(0.3, 0.82, 0.57), M.steel, pcb, x - 0.65, y, -0.27);
+    mesh(new THREE.BoxGeometry(0.3, 0.82, 0.57), M.steel, pcb, x + 0.65, y, -0.27);
+  });
+  // backlight LED (front side) + inductor
+  mesh(new THREE.BoxGeometry(1.4, 1, 0.6), M.white, pcb, -12.6, 10.6, 1.1);
+  const led = mesh(new THREE.SphereGeometry(0.45, 16, 10), M.led, pcb, -12.6, 10.6, 1.45); pcb.userData.led = led;
+  mesh(new THREE.CylinderGeometry(1.1, 1.1, 1.1, 24).rotateX(PI / 2), M.copper, pcb, 9, 2, -0.55);
+  mesh(new THREE.CylinderGeometry(1.15, 1.15, 0.2, 24).rotateX(PI / 2), M.smdBlack, pcb, 9, 2, -1.15);
+}
+
+// ---- battery ----
+const batt = part('CR2016 lithium cell', [0, 0, -27], 7);
+{
+  const side = new THREE.MeshStandardMaterial({ color: 0xc2c5c9, roughness: 0.25, metalness: 1 });
+  const top = new THREE.MeshStandardMaterial({ map: battTex, roughness: 0.3, metalness: 0.9 });
+  const g = new THREE.CylinderGeometry(10, 10, 1.6, 64).rotateX(-PI / 2);
+  mesh(g, [side, top, side], batt, 4, -2, -2.0);
+  mesh(new THREE.TorusGeometry(9.9, 0.12, 8, 64), M.darkSteel, batt, 4, -2, -1.2);
+}
+
+// ---- battery clamp ----
+const clip = part('Battery clamp spring', [0, 0, -29.5], 6.5);
+{
+  const s = rrShape(24, 5, 1.6, 4, -2); s.holes.push(new THREE.Path().absarc(-6.2, -2, 0.9, 0, TAU, true)); s.holes.push(new THREE.Path().absarc(14.2, -2, 0.9, 0, TAU, true));
+  mesh(extrude(s, 0.25, -3.1), M.steel, clip);
+  mesh(new THREE.BoxGeometry(2.2, 4, 0.25), M.steel, clip, 4, -2, -2.9).rotation.x = 0.0;
+  mesh(new THREE.BoxGeometry(0.25, 3, 1.9), M.steel, clip, -8, -2, -1.95);
+}
+
+// ---- module back cover ----
+const cover = part('Anti-magnetic module cover', [0, 0, -32.8], 6);
+{
+  const s = rrShape(29, 27, 2.4);
+  s.holes.push(new THREE.Path().absarc(-12.5, 11.5, 0.9, 0, TAU, true));
+  s.holes.push(new THREE.Path().absarc(12.5, -11.5, 0.9, 0, TAU, true));
+  s.holes.push(rrHole(5, 3, 1, 4, -2));
+  mesh(extrude(s, 0.3, -3.6), M.darkSteel, cover);
+  // piezo contact coil spring
+  mesh(new THREE.TubeGeometry(new Helix(0.55, 1.2, 6), 120, 0.09, 6).translate(0, 0, -4.8), M.steel, cover, -10, -9, 0);
+}
+
+// ---- shock cushion ----
+const cushion = part('Shock cushion gasket', [0, 0, -35.6], 5.5);
+{
+  const s = rrShape(29.6, 27.6, 3); s.holes.push(rrHole(26, 24, 2));
+  mesh(extrude(s, 0.4, -4.05), M.rubber, cushion);
+}
+
+// ---- piezo buzzer ----
+const piezo = part('Piezo buzzer disc', [0, 0, -38.8], 5);
+{
+  mesh(new THREE.CylinderGeometry(8, 8, 0.15, 64).rotateX(PI / 2), M.brass, piezo, 0, 0, -4.3);
+  mesh(new THREE.CylinderGeometry(6, 6, 0.12, 64).rotateX(PI / 2), M.ceramic, piezo, 0, 0, -4.17);
+  mesh(new THREE.CylinderGeometry(5.5, 5.5, 0.03, 64).rotateX(PI / 2), M.steel, piezo, 0, 0, -4.1);
+}
+
+// ---- o-ring ----
+const oring = part('Case-back O-ring', [0, 0, -42], 4);
+mesh(loopTube(32, 30, 4, 0.35), M.rubber, oring, 0, 0, -4.5);
+
+// ---- case back ----
+const back = part('Stainless case back (engraved)', [0, 0, -46], 3);
+const SCREWPOS = [[15.5, 15], [-15.5, 15], [15.5, -15], [-15.5, -15]];
+{
+  const s = rrShape(CB, CB, 5);
+  SCREWPOS.forEach(([x, y]) => s.holes.push(new THREE.Path().absarc(x, y, 1.0, 0, TAU, true)));
+  const eng = new THREE.MeshStandardMaterial({ map: backTex, metalness: 0.8, roughness: 0.32 });
+  mesh(extrude(s, 1.0, -5.6, 0.2), [eng, M.steel], back);
+}
+
+// ---- screws (threaded) ----
+const PITCH = 0.45, TURNS = 8, TRAVEL = PITCH * TURNS;
+const screws = [];
+{
+  const headGeo = new THREE.LatheGeometry([[0, 0], [1.5, 0], [1.58, 0.15], [1.5, 0.55], [1.15, 0.85], [0, 0.92]].map(([x, y]) => new THREE.Vector2(x, y)), 40).rotateX(PI / 2);
+  const thr = threadGeo(0.62, 0.88, PITCH, 3.8);
+  const shank = new THREE.CylinderGeometry(0.62, 0.62, 3.8, 24).rotateX(PI / 2).translate(0, 0, -1.9);
+  SCREWPOS.forEach(([x, y], i) => {
+    const g = part(`Case-back screw M1.6 #${i + 1} (helical thread, p=${PITCH})`, [x * 0.35, y * 0.35, -50], 2, { screw: true });
+    g.position.set(x, y, -5.8);
+    const holder = new THREE.Group(); holder.rotation.y = PI; g.add(holder); // local +z points out of the back
+    const rot = new THREE.Group(); holder.add(rot);
+    mesh(headGeo, M.steel, rot).scale.set(1, 1, 1);
+    mesh(thr, M.steel, rot);
+    mesh(shank, M.darkSteel, rot);
+    // phillips cross recess
+    mesh(new THREE.BoxGeometry(1.9, 0.36, 0.3), M.hole, rot, 0, 0, 0.82);
+    mesh(new THREE.BoxGeometry(0.36, 1.9, 0.3), M.hole, rot, 0, 0, 0.82);
+    screws.push({ g, rot, home: g.position.clone() });
+  });
+}
+
+// ---- push buttons ----
+const buttons = [];
+for (const sx of [1, -1]) for (const sy of [1, -1]) {
+  const nm = sx < 0 ? (sy > 0 ? 'ADJUST' : 'MODE') : (sy > 0 ? 'LIGHT' : 'START/STOP');
+  const cap = part(`${nm} pusher + stem`, [sx * 16, 0, 0], 1.5);
+  const capIn = new THREE.Group(); cap.add(capIn);
+  mesh(new THREE.CylinderGeometry(1.6, 1.6, 2.2, 32).rotateZ(PI / 2), M.steel, capIn, sx * 23.6, sy * 9, 1);
+  mesh(new THREE.CylinderGeometry(1.25, 1.6, 0.3, 32).rotateZ(-sx * PI / 2), M.steel, capIn, sx * 24.85, sy * 9, 1);
+  mesh(new THREE.CylinderGeometry(0.62, 0.62, 6, 20).rotateZ(PI / 2), M.steel, capIn, sx * 19.6, sy * 9, 1);
+  mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.3, 20).rotateZ(PI / 2), M.steel, capIn, sx * 16.7, sy * 9, 1);
+  const spring = part(`${nm} return spring`, [sx * 10, 0, 0], 1.5);
+  mesh(new THREE.TubeGeometry(new Helix(1.0, 3.4, 7), 260, 0.1, 6).rotateY(PI / 2).translate(-1.7, 0, 0), M.steel, spring, sx * 19.6, sy * 9, 1);
+  const ring = part(`${nm} stem O-ring`, [sx * 5.5, 0, 0], 1.5);
+  mesh(new THREE.TorusGeometry(0.82, 0.24, 10, 28).rotateY(PI / 2), M.rubber, ring, sx * 21.4, sy * 9, 1);
+  buttons.push({ capIn, sx, sy, nm });
+}
+
+// ---- spring bars ----
+for (const sy of [1, -1]) {
+  const sb = part('Spring bar (strap pin)', [0, sy * 9, -4], 1);
+  mesh(new THREE.CylinderGeometry(0.62, 0.62, 21, 20).rotateZ(PI / 2), M.steel, sb, 0, sy * 24, -1.5);
+  for (const sx of [1, -1]) mesh(new THREE.CylinderGeometry(0.35, 0.35, 2.6, 12).rotateZ(PI / 2), M.steel, sb, sx * 11.6, sy * 24, -1.5);
+}
+
+// ---- straps (swept geometry) ----
+function sweepStrap(pts, w, thick) {
+  const pos = [], idx = []; const n = pts.length;
+  const frames = pts.map((p, i) => {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
+    let ty = b[0] - a[0], tz = b[1] - a[1]; const l = Math.hypot(ty, tz); ty /= l; tz /= l;
+    return { y: p[0], z: p[1], ny: -tz, nz: ty, th: thick(i / (n - 1)) };
+  });
+  const corner = (f, k) => {
+    const sx = (k === 0 || k === 3) ? -w / 2 : w / 2, sn = (k < 2) ? f.th / 2 : -f.th / 2;
+    return [sx, f.y + f.ny * sn, f.z + f.nz * sn];
+  };
+  for (let side = 0; side < 4; side++) {
+    const base = pos.length / 3;
+    frames.forEach(f => { pos.push(...corner(f, side), ...corner(f, (side + 1) % 4)); });
+    for (let i = 0; i < n - 1; i++) { const a = base + i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  }
+  for (const end of [0, n - 1]) { const base = pos.length / 3; for (let k = 0; k < 4; k++) pos.push(...corner(frames[end], k)); idx.push(base, base + 1, base + 2, base, base + 2, base + 3); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  return { geo: g, frames };
+}
+function strapPath(sign, R, A, n = 90) {
+  const pts = [];
+  for (let i = 0; i <= n; i++) { const a = A * i / n; pts.push([sign * (25.2 + R * Math.sin(a)), -1.5 - R * (1 - Math.cos(a))]); }
+  return pts;
+}
+const ribbed = s => 2.6 + (s < 0.2 ? 0.45 * Math.max(0, Math.sin(s * 160)) : 0) - (s > 0.97 ? (s - 0.97) * 20 : 0);
+function basisAt(f, parent, obj) {
+  const yAx = new THREE.Vector3(0, f.nz, -f.ny), zAx = new THREE.Vector3(0, f.ny, f.nz), xAx = new THREE.Vector3().crossVectors(yAx, zAx);
+  obj.matrixAutoUpdate = true; obj.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAx, yAx, zAx)); obj.position.set(0, f.y, f.z); parent.add(obj); return obj;
+}
+{
+  const top = part('Upper strap (buckle side)', [0, 12, 8], 0);
+  const s1 = sweepStrap(strapPath(1, 22, 1.75), 21.4, ribbed); mesh(s1.geo, M.strap, top);
+  const endF = s1.frames[s1.frames.length - 1];
+  const buckle = basisAt(endF, top, new THREE.Group());
+  mesh(loopTube(25, 10, 2.5, 0.75).translate(0, 4, 0), M.steel, buckle);
+  mesh(new THREE.CylinderGeometry(0.5, 0.5, 23.5, 16).rotateZ(PI / 2), M.steel, buckle, 0, -0.6, 0);
+  const tongue = mesh(new THREE.CylinderGeometry(0.45, 0.45, 9.5, 12), M.steel, buckle, 0, 4.2, 1.1); tongue.rotation.x = -0.12;
+  const kf = s1.frames[s1.frames.length - 12];
+  basisAt(kf, top, new THREE.Group()).add(new THREE.Mesh(loopTube(23.4, 3.9, 1.6, 0.45).rotateX(PI / 2), M.strap));
+  const bot = part('Lower strap (holed)', [0, -12, 8], 0);
+  const s2 = sweepStrap(strapPath(-1, 22, 2.45), 21.4, ribbed); mesh(s2.geo, M.strap, bot);
+  for (let i = 0; i < 9; i++) {
+    const f = s2.frames[38 + i * 5];
+    const h = basisAt(f, bot, new THREE.Group());
+    mesh(new THREE.CylinderGeometry(0.85, 0.85, 3.4, 18).rotateX(PI / 2), M.hole, h);
+  }
+}
+
+/* ---------------- stats / hover ---------------- */
+document.getElementById('pc').textContent = parts.length;
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2(); const tip = document.getElementById('tip');
+let hoverEvt = null;
+renderer.domElement.addEventListener('pointermove', e => { hoverEvt = e; });
+renderer.domElement.addEventListener('pointerleave', () => { hoverEvt = null; tip.style.display = 'none'; });
+function doHover() {
+  if (!hoverEvt) return;
+  mouse.set(hoverEvt.clientX / innerWidth * 2 - 1, -hoverEvt.clientY / innerHeight * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  const hit = ray.intersectObject(watch, true).find(h => h.object.material !== M.glass);
+  if (!hit) { tip.style.display = 'none'; return; }
+  let o = hit.object; while (o && !o.userData.partName) o = o.parent;
+  if (!o) return;
+  tip.textContent = o.userData.partName; tip.style.display = 'block';
+  tip.style.left = (hoverEvt.clientX + 14) + 'px'; tip.style.top = (hoverEvt.clientY + 12) + 'px';
+}
+
+/* ---------------- timeline ---------------- */
+const L = 26;
+const KEYS = [ // t, rotY, tiltX, camDist
+  [0, -0.35, 0.22, 128], [2.6, 0.3, 0.2, 124], [4.6, PI, 0.24, 120], [8.2, PI + 0.35, 0.3, 112],
+  [11.8, PI + 0.95, 0.42, 205], [15, PI + 1.25, 0.36, 205], [18.6, PI + 0.3, 0.28, 112],
+  [21.8, PI - 0.1, 0.24, 120], [24, TAU - 0.35, 0.22, 128], [26, TAU - 0.35, 0.22, 128],
+];
+function keyAt(t) {
+  for (let i = 0; i < KEYS.length - 1; i++) {
+    const a = KEYS[i], b = KEYS[i + 1];
+    if (t <= b[0]) { const k = ease((t - a[0]) / (b[0] - a[0])); return a.map((v, j) => v + (b[j] - v) * k); }
+  }
+  return KEYS[KEYS.length - 1];
+}
+const PHASES = [
+  [0, '01', 'assembled — live local time on the LCD'], [0.7, '01', 'LIGHT pressed — backlight on'], [2.6, '02', 'flip to the case back'],
+  [4.6, '03', `unscrewing 4 threaded screws · ${TURNS} turns each`], [8.2, '04', `exploding ${parts.length} parts`],
+  [11.8, '05', 'exploded view'], [15, '06', 'reassembling'], [18.6, '07', 'driving screws home'],
+  [21.8, '08', 'flip to the dial'], [24, '01', 'assembled'],
+];
+const phaseEl = document.getElementById('phase'); let lastPhase = '';
+const maxOrder = Math.max(...parts.map(p => p.order)), SPREAD = 0.9;
+
+function apply(t) {
+  const [, ry, rx, dist] = keyAt(t);
+  spin.rotation.y = ry; pivot.rotation.x = rx;
+  const U = ramp(t, 4.6, 8.2) * (1 - ramp(t, 18.6, 21.8));
+  const E = ramp(t, 8.2, 11.8) * (1 - ramp(t, 15, 18.6));
+  watch.position.z = 17 * E;
+  for (const p of parts) {
+    const k = ease(clamp(E * (1 + SPREAD) - SPREAD * p.order / maxOrder));
+    if (p.screw) continue;
+    p.g.position.copy(p.off).multiplyScalar(k);
+  }
+  // screws: rotate + translate along helix, then fly with the explosion
+  for (const s of screws) {
+    const p = parts.find(q => q.g === s.g);
+    const k = ease(clamp(E * (1 + SPREAD) - SPREAD * p.order / maxOrder));
+    const ang = U * TURNS * TAU;
+    s.rot.rotation.z = ang;
+    s.g.position.copy(s.home).addScaledVector(p.off, k);
+    s.g.position.z -= U * TRAVEL;
+  }
+  // LIGHT button + backlight
+  const press = ramp(t, 0.7, 0.85) * (1 - ramp(t, 2.25, 2.45));
+  const glow = ramp(t, 0.8, 1.0) * (1 - ramp(t, 2.3, 2.6));
+  buttons.forEach(b => { b.capIn.position.x = b.nm === 'LIGHT' ? -b.sx * 0.7 * press : 0; });
+  const fm = lcd.userData.front; fm.emissive.setRGB(glow * 0.55, glow * 0.75, glow * 0.7);
+  M.led.emissive.setRGB(glow, glow * 0.85, glow * 0.4);
+  drawLCD(glow);
+  // camera distance along current orbit direction
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  const aspectFix = Math.max(1, 1.25 / camera.aspect);
+  camera.position.copy(controls.target).addScaledVector(dir, dist * userZoom * aspectFix);
+  // caption
+  let ph = PHASES[0]; for (const q of PHASES) if (t >= q[0]) ph = q;
+  const key = ph[1] + ph[2]; if (key !== lastPhase) { lastPhase = key; phaseEl.innerHTML = `<b>${ph[1]}</b>${ph[2]}`; }
+}
+
+/* ---------------- UI ---------------- */
+let playing = true, speed = 1, T = 0, scrubbing = false;
+const scrub = document.getElementById('scrub'), playBtn = document.getElementById('play');
+playBtn.onclick = () => { playing = !playing; playBtn.textContent = playing ? '❚❚' : '▶'; playBtn.classList.toggle('on', playing); };
+scrub.addEventListener('input', () => { T = scrub.value / 1000 * L; scrubbing = true; });
+scrub.addEventListener('change', () => { scrubbing = false; });
+document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => {
+  speed = +b.dataset.s; document.querySelectorAll('[data-s]').forEach(x => x.classList.toggle('on', x === b));
+});
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+const params = new URLSearchParams(location.search);
+if (params.has('t')) { T = +params.get('t'); playing = false; }
+
+let last = performance.now();
+function tick(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (playing && !scrubbing) T = (T + dt * speed) % L;
+  if (!scrubbing) scrub.value = Math.round(T / L * 1000);
+  controls.update();
+  apply(T);
+  doHover();
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+window.__ready = true;
+</script>
+</body>
+</html>

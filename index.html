@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Animacje 3D dla stron — portfolio</title>
+<style>
+:root{--ink:#16202a;--muted:#6a7580;--line:#e4e2dd;--bg:#f6f5f2;--accent:#e4572e}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+body{display:flex;flex-direction:column;height:100vh;height:100dvh}
+header{display:flex;align-items:center;gap:22px;padding:14px 22px 0;background:#fff;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{font-weight:800;font-size:16px;letter-spacing:-.01em;padding-bottom:14px;white-space:nowrap}
+.brand span{color:var(--muted);font-weight:500;margin-left:8px;font-size:13px}
+nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1}
+nav::-webkit-scrollbar{display:none}
+nav a{display:flex;flex-direction:column;gap:2px;padding:6px 14px 12px;text-decoration:none;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
+nav a b{font-size:14px;font-weight:650;color:inherit}
+nav a small{font-size:11.5px;color:#9aa3ab}
+nav a:hover{color:var(--ink)}
+nav a.on{color:var(--ink);border-bottom-color:var(--accent)}
+nav a.on small{color:var(--accent)}
+.meta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 22px;background:#fff;border-bottom:1px solid var(--line);font-size:13.5px}
+.chip{display:inline-flex;align-items:center;gap:8px;background:#fff3ee;color:#b23c17;border:1px solid #f5cdbd;border-radius:99px;padding:4px 12px;font-weight:700}
+.chip.neutral{background:#f1f3f5;color:#4a5560;border-color:#dde2e6}
+.meta .desc{color:var(--muted);flex:1;min-width:200px}
+.meta a.btn{color:var(--ink);text-decoration:none;border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-weight:600;white-space:nowrap;background:#fff}
+.meta a.btn:hover{border-color:var(--ink)}
+main{flex:1;position:relative;min-height:0}
+iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
+.keys{position:fixed;right:14px;bottom:12px;font-size:11px;color:#9aa3ab;background:rgba(255,255,255,.85);border:1px solid var(--line);border-radius:6px;padding:3px 8px;pointer-events:none}
+@media (max-width:700px){.brand span,.keys{display:none}.meta{padding:8px 14px}header{padding:10px 14px 0}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Animacje 3D<span>interaktywne prezentacje dla stron firmowych</span></div>
+  <nav id="tabs"></nav>
+</header>
+<div class="meta" id="meta"></div>
+<main><iframe id="frame" title="Animacja" allow="fullscreen"></iframe></main>
+<div class="keys">← → przełącz · F pełny ekran</div>
+
+<script>
+const ITEMS = [
+  { id: 'ocieplenie', name: 'Ocieplenie elewacji', domain: 'wi-bud.pl', url: 'https://wi-bud.pl/uslugi/ocieplanie-elewacji-domow-i-budynkow/', file: 'animacje/ocieplenie.html',
+    desc: 'Dom ocieplany krok po kroku w 8 etapach (ETICS): termowizja przed i po, przekrój ściany, wybór koloru i faktury tynku.' },
+  { id: 'bunkier', name: 'Dom bunkier', domain: 'brickon.pl', url: 'https://brickon.pl/oferta/projekt-i-budowa-domu-typ-bunkier/', file: 'animacje/bunkier.html',
+    desc: 'Budowa domu typu bunkier w 13 krokach, od wytyczenia po odbiór kluczy. Klikalne elementy z opisami, przekrój, tekstury materiałów.' },
+  { id: 'tablica', name: 'Tablica domen', domain: 'domena.pl', url: 'https://www.domena.pl/domeny', file: 'animacje/tablica-domen.html',
+    desc: 'Wyszukiwarka domen jako biała tablica lotniskowa z klapkami i bębnem końcówek. Dostępność w tej wersji jest symulowana.' },
+  { id: 'rejestracja', name: 'Rejestracja domen', domain: 'domena.pl', url: 'https://domeny.domena.pl/?action=nologged&subaction=ncregisterdomain', file: 'animacje/rejestracja-domen.html',
+    desc: 'Makieta koncepcyjna podstrony rejestracji z wbudowaną tablicą: cennik rozszerzeń, koszyk, opisy usług.' },
+  { id: 'zegarek', name: 'Zegarek — teardown', domain: null, file: 'animacje/zegarek.html',
+    desc: 'Demo możliwości: zegarek w stylu G-Shocka z 35 częściami rozkręca się, rozpada i składa. Bez plików modeli i obrazków.' },
+];
+const tabs = document.getElementById('tabs'), meta = document.getElementById('meta'), frame = document.getElementById('frame');
+ITEMS.forEach(it => {
+  const a = document.createElement('a'); a.href = '#' + it.id; a.dataset.id = it.id;
+  a.innerHTML = `<b>${it.name}</b><small>${it.domain || 'demo techniczne'}</small>`;
+  tabs.appendChild(a);
+});
+function show() {
+  const id = location.hash.slice(1), it = ITEMS.find(x => x.id === id) || ITEMS[0];
+  tabs.querySelectorAll('a').forEach(a => a.classList.toggle('on', a.dataset.id === it.id));
+  tabs.querySelector('a.on').scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  meta.innerHTML = (it.domain
+      ? `<span class="chip">Dla domeny: ${it.domain}</span>`
+      : `<span class="chip neutral">Demo techniczne · bez klienta</span>`) +
+    `<span class="desc">${it.desc}</span>` +
+    (it.url ? `<a class="btn" href="${it.url}" target="_blank" rel="noopener">Strona klienta ↗</a>` : '') +
+    `<a class="btn" href="${it.file}" target="_blank" rel="noopener">Pełny ekran ↗</a>`;
+  if (frame.getAttribute('src') !== it.file) frame.src = it.file; // only one 3D scene runs at a time
+  document.title = `${it.name} — Animacje 3D`;
+}
+addEventListener('hashchange', show);
+addEventListener('keydown', e => {
+  if (e.target.closest('input,textarea,select')) return;
+  const i = ITEMS.findIndex(x => '#' + x.id === location.hash), cur = i < 0 ? 0 : i;
+  if (e.key === 'ArrowRight') location.hash = ITEMS[(cur + 1) % ITEMS.length].id;
+  if (e.key === 'ArrowLeft') location.hash = ITEMS[(cur - 1 + ITEMS.length) % ITEMS.length].id;
+  if (e.key.toLowerCase() === 'f') (frame.requestFullscreen ? frame.requestFullscreen() : null)?.catch?.(() => {});
+});
+show();
+</script>
+</body>
+</html>

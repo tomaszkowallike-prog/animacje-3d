@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tablica domen — sprawdź dostępność</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ====== PALETA — podmień na kolory marki ====== */
+:root{
+  --navy:#0b2a4f;      /* tekst główny, znaki na klapkach */
+  --accent:#1666d8;    /* przyciski, focus */
+  --accent-2:#0e4fae;
+  --ok:#14a44d;        /* DOSTĘPNA */
+  --bad:#d92d20;       /* ZAJĘTA */
+  --amber:#f2a516;     /* SPRAWDZAM */
+  --page:#f3f6fa;
+  --frame:#e4e8ee;     /* rama tablicy */
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--page);color:var(--navy);font-family:Inter,system-ui,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:40px 20px 60px}
+h1{font-size:clamp(26px,4vw,40px);margin:0 0 6px;letter-spacing:-.02em}
+.lead{margin:0 0 26px;color:#4b5d74;font-size:16px}
+
+/* search */
+form.search{display:flex;gap:10px;background:#fff;border:1px solid #d9e0ea;border-radius:14px;padding:8px;box-shadow:0 6px 24px rgba(11,42,79,.06);margin-bottom:22px}
+.search .www{align-self:center;padding-left:12px;color:#8a99ad;font-weight:600}
+.search input{flex:1;min-width:0;border:0;outline:0;font:600 20px Inter,sans-serif;color:var(--navy);background:transparent;padding:10px 4px}
+.search select{border:1px solid #d9e0ea;border-radius:10px;font:600 16px Inter;color:var(--navy);padding:0 10px;background:#f7f9fc}
+.search button{border:0;border-radius:10px;background:var(--accent);color:#fff;font:700 16px Inter;padding:0 26px;cursor:pointer}
+.search button:hover{background:var(--accent-2)}
+form.search:focus-within{border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 18%,transparent)}
+
+/* board */
+.board{background:#fff;border-radius:16px;padding:20px 20px 16px;border:1px solid #e1e6ed}
+.bhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px}
+.btitle{font:700 13px Inter;letter-spacing:.22em;color:#5d6e84;display:flex;align-items:center;gap:10px}
+.btitle svg{width:20px;height:20px}
+.clock{display:flex;gap:var(--gap)}
+.main{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:6px 12px 18px;border-bottom:1px solid #eef1f5}
+.main .name{display:flex;gap:var(--gapm)}
+.lampbox{display:flex;align-items:center;gap:12px;margin-left:auto}
+.lamp{width:14px;height:14px;border-radius:50%;background:#d5dbe3;transition:background .25s,box-shadow .25s}
+.lamp.ok{background:var(--ok);box-shadow:0 0 0 5px color-mix(in srgb,var(--ok) 16%,transparent)}
+.lamp.bad{background:var(--bad);box-shadow:0 0 0 5px color-mix(in srgb,var(--bad) 14%,transparent)}
+.lamp.busy{background:var(--amber);animation:blink .5s steps(2) infinite}
+@keyframes blink{50%{opacity:.35}}
+.status{display:flex;gap:var(--gap)}
+
+/* flaps */
+.flap{position:relative;width:var(--cw);height:calc(var(--cw)*1.4);perspective:300px;font:600 calc(var(--cw)*0.98) "JetBrains Mono",ui-monospace,monospace;color:var(--navy);flex:none}
+.flap.m{width:var(--cwm);height:calc(var(--cwm)*1.4);font-size:calc(var(--cwm)*0.98)}
+.flap .h{position:absolute;left:0;right:0;height:50%;overflow:hidden;backface-visibility:hidden}
+.flap .t{top:0;border-radius:3px 3px 0 0;background:#f4f6f9}
+.flap .b{bottom:0;border-radius:0 0 3px 3px;background:#f4f6f9}
+.flap.blank .t,.flap.blank .b{background:#fafbfc}
+.flap .h span{position:absolute;left:0;right:0;height:200%;display:flex;align-items:center;justify-content:center;line-height:1}
+.flap .t span{top:0}.flap .b span{bottom:0}
+.flap .lt{transform-origin:50% 100%;z-index:2;visibility:hidden}
+.flap .lb{transform-origin:50% 0;z-index:2;visibility:hidden}
+.flap::after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(255,255,255,.55);z-index:3;pointer-events:none}
+.tone-ok{color:var(--ok)}.tone-bad{color:var(--bad)}.tone-busy{color:#b97a00}.tone-mute{color:#b4bfcc}
+
+/* drum */
+.drumbox{display:flex;align-items:center;gap:6px}
+.drum{position:relative;width:calc(var(--cwm)*4.6);height:calc(var(--cwm)*2.6);perspective:520px;border-radius:8px;background:#fff;overflow:hidden;cursor:ns-resize;touch-action:none}
+.cyl{position:absolute;inset:0;transform-style:preserve-3d}
+.face{position:absolute;left:4%;right:4%;top:50%;height:var(--fh);margin-top:calc(var(--fh)/-2);display:flex;align-items:center;justify-content:center;font:600 calc(var(--cwm)*0.9) "JetBrains Mono",ui-monospace,monospace;color:var(--navy);background:#f4f6f9;border-radius:3px;backface-visibility:hidden}
+.drum::before,.drum::after{content:"";position:absolute;left:0;right:0;height:30%;z-index:2;pointer-events:none}
+.drum::before{top:0;background:linear-gradient(#fff,rgba(255,255,255,.4))}
+.drum::after{bottom:0;background:linear-gradient(rgba(255,255,255,.4),#fff)}
+.drum .win{position:absolute;left:0;right:0;top:50%;height:calc(var(--fh) + 6px);transform:translateY(-50%);border:1.5px solid var(--accent);border-radius:5px;z-index:3;pointer-events:none}
+.arrows{display:flex;flex-direction:column;gap:4px}
+.arrows button{width:26px;height:22px;border:1px solid #e1e6ed;border-radius:6px;background:#fff;color:var(--navy);cursor:pointer;font-size:11px;line-height:1}
+.arrows button:hover{border-color:var(--accent);color:var(--accent)}
+
+/* rows */
+.colhead{display:flex;gap:var(--colgap);margin:18px 0 8px;padding:0 12px;font:700 11px Inter;letter-spacing:.18em;color:#6b7b90}
+.rows{display:flex;flex-direction:column;gap:8px;padding:0 12px}
+.row{display:flex;gap:var(--colgap);align-items:center}
+.cells{display:flex;gap:var(--gap)}
+.c-dom{width:calc(var(--cw)*22 + var(--gap)*21)}.c-pr{width:calc(var(--cw)*6 + var(--gap)*5)}.c-st{width:calc(var(--cw)*9 + var(--gap)*8)}
+.row .act{margin-left:auto}
+.row .act button{border:1px solid #cfd6df;background:#fff;border-radius:8px;font:600 12px Inter;color:var(--navy);padding:6px 10px;cursor:pointer;white-space:nowrap}
+.row .act button.go{background:var(--accent);border-color:var(--accent);color:#fff}
+
+.foot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;margin-top:18px}
+.offer{font-size:16px;color:#33465e;min-height:24px}
+.offer b{color:var(--navy)}
+.offer .price{color:var(--accent);font-weight:700}
+.cta{border:0;border-radius:10px;background:var(--ok);color:#fff;font:700 15px Inter;padding:12px 22px;cursor:pointer;opacity:.35;pointer-events:none;transition:opacity .2s}
+.cta.on{opacity:1;pointer-events:auto}
+.note{margin-top:14px;font-size:12px;color:#7f8da0;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.pill{background:#fff;border:1px solid #d9e0ea;border-radius:99px;padding:3px 10px}
+#sound{border:1px solid #d9e0ea;background:#fff;border-radius:99px;padding:3px 10px;font:500 12px Inter;color:#4b5d74;cursor:pointer}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--navy);color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;opacity:0;transition:.25s;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%)}
+.dot{display:none;width:12px;height:12px;border-radius:50%;background:#c3cad5;margin-left:auto;flex:none}
+.dot.ok{background:var(--ok);box-shadow:0 0 8px color-mix(in srgb,var(--ok) 60%,transparent)}.dot.bad{background:var(--bad)}.dot.busy{background:var(--amber);animation:blink .5s steps(2) infinite}
+@media (max-width:640px){
+  .c-pr,.c-st,.colhead .c-pr,.colhead .c-st{display:none}
+  .c-dom{width:auto}.c-dom .flap:nth-child(n+18){display:none}
+  .dot{display:block}
+}
+@media (max-width:720px){
+  .wrap{padding:24px 12px 40px}
+  .search .www{display:none}
+  .search button{padding:0 16px}
+  .main{gap:12px}.lampbox{margin-left:0}
+  .row .act{display:none}
+  .board{padding:12px 8px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Sprawdź, czy Twoja domena jest wolna</h1>
+  <p class="lead">Wpisz nazwę — tablica sprawdzi ją w najpopularniejszych końcówkach.</p>
+
+  <form class="search" id="f" autocomplete="off">
+    <span class="www">www.</span>
+    <input id="q" maxlength="18" placeholder="twojafirma" aria-label="Nazwa domeny" spellcheck="false">
+    <select id="sel" aria-label="Końcówka"></select>
+    <button type="submit">Sprawdź</button>
+  </form>
+
+  <section class="board" aria-live="polite">
+    <div class="bhead">
+      <div class="btitle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg>DOMENY · SPRAWDZANIE</div>
+      <div class="clock" id="clock"></div>
+    </div>
+
+    <div class="main">
+      <div class="name" id="name"></div>
+      <div class="drumbox">
+        <div class="drum" id="drum"><div class="cyl" id="cyl"></div><div class="win"></div></div>
+        <div class="arrows"><button type="button" id="up" aria-label="Poprzednia końcówka">▲</button><button type="button" id="down" aria-label="Następna końcówka">▼</button></div>
+      </div>
+      <div class="lampbox"><div class="lamp" id="lamp"></div><div class="status" id="status"></div></div>
+    </div>
+
+    <div class="colhead"><div class="c-dom">DOMENA</div><div class="c-pr">CENA</div><div class="c-st">STATUS</div></div>
+    <div class="rows" id="rows"></div>
+
+    <div class="foot">
+      <div class="offer" id="offer">&nbsp;</div>
+      <button class="cta" id="cta" type="button">Zarejestruj domenę</button>
+    </div>
+  </section>
+  <div class="note">
+    <span class="pill">Tryb demo: dostępność jest symulowana</span>
+    <span>Ceny netto za 1. rok, wg cennika domena.pl z 3.11.2026</span>
+    <button id="sound" type="button">🔊 dźwięk: wł.</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- dane ---------- */
+const TLDS = [
+  { t: '.pl', p: '4,99' }, { t: '.com.pl', p: '4,99' }, { t: '.eu', p: '29,99' },
+  { t: '.com', p: '49,99' }, { t: '.net', p: '49,99' }, { t: '.org', p: '49,99' },
+  { t: '.online', p: '179' }, { t: '.art', p: '189' }, { t: '.shop', p: '199' },
+];
+const ROW_TLDS = ['.pl', '.com.pl', '.eu', '.com', '.net', '.shop'];
+const priceOf = t => TLDS.find(x => x.t === t).p;
+
+/* Dostępność — SYMULACJA. Podmień na prawdziwe API rejestratora:
+   async function checkAvailability(name, tld) { const r = await fetch(`/api/check?d=${name}${tld}`); return (await r.json()).available; } */
+const TAKEN = new Set(['google','allegro','onet','wp','interia','olx','facebook','domena','home','orlen','pko','mbank','test','sklep','firma','apple','amazon','kot','pies','dom','auto','praca','news','shop','blog','info','biuro','polska','warszawa','krakow','gazeta','bank','hotel','kwiaty','pizza','fryzjer','taxi','ogloszenia']);
+function hash(s) { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.codePointAt(0), 16777619); return (h >>> 0) / 4294967295; }
+function checkAvailability(name, tld) {
+  return new Promise(res => setTimeout(() => {
+    const pop = { '.pl': 1, '.com': 1, '.com.pl': .8, '.eu': .6, '.net': .7, '.org': .6, '.online': .3, '.art': .25, '.shop': .4 }[tld];
+    if (TAKEN.has(name)) return res(pop < .5 ? hash(name + tld) > .5 : false);
+    const base = name.length <= 3 ? .92 : name.length <= 5 ? .55 : name.length <= 8 ? .22 : .08;
+    res(hash(name + tld) > base * pop);
+  }, 550 + Math.random() * 450));
+}
+
+/* ---------- dźwięk (syntezowany klekot) ---------- */
+let actx = null, soundOn = true, lastClick = 0;
+function audio() { if (!actx) try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} if (actx && actx.state === 'suspended') actx.resume(); }
+function clack(vol = 0.5, f = 2400) {
+  if (!soundOn || !actx || actx.state !== 'running') return;
+  const now = actx.currentTime; if (now - lastClick < 0.011) return; lastClick = now;
+  const len = 0.018, buf = actx.createBuffer(1, Math.ceil(actx.sampleRate * len), actx.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 4);
+  const src = actx.createBufferSource(); src.buffer = buf;
+  const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * (0.8 + Math.random() * 0.4); bp.Q.value = 1.4;
+  const g = actx.createGain(); g.gain.value = 0.12 * vol;
+  src.connect(bp).connect(g).connect(actx.destination); src.start(now);
+}
+['pointerdown', 'keydown'].forEach(e => addEventListener(e, audio, { once: false, passive: true }));
+const soundBtn = document.getElementById('sound');
+soundBtn.onclick = () => { soundOn = !soundOn; soundBtn.textContent = soundOn ? '🔊 dźwięk: wł.' : '🔇 dźwięk: wył.'; };
+
+/* ---------- klapka ---------- */
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const CH_NAME = ' abcdefghijklmnopqrstuvwxyząćęłńóśźż0123456789-.';
+const CH_UP = ' ABCDEFGHIJKLMNOPQRSTUVWXYZĄĆĘŁŃÓŚŹŻ0123456789,.:-';
+class Flap {
+  constructor(parent, chars, big = false) {
+    this.chars = chars; this.cur = ' '; this.target = ' '; this.running = false;
+    const el = this.el = document.createElement('div'); el.className = 'flap' + (big ? ' m' : '');
+    el.innerHTML = '<div class="h t"><span> </span></div><div class="h b"><span> </span></div><div class="h t lt"><span></span></div><div class="h b lb"><span></span></div>';
+    [this.t, this.b, this.lt, this.lb] = [...el.children];
+    parent.appendChild(el);
+  }
+  tone(c) { ['ok', 'bad', 'busy', 'mute'].forEach(x => this.el.classList.toggle('tone-' + x, x === c)); }
+  blank() { this.el.classList.toggle('blank', this.cur === ' ' && this.target === ' '); }
+  set(ch, delay = 0) {
+    ch = this.chars.includes(ch) ? ch : ' ';
+    this.target = ch; this.blank();
+    if (this.running || this.cur === ch) return;
+    this.running = true; setTimeout(() => this.run(), delay);
+  }
+  next() {
+    const n = this.chars.length, i = this.chars.indexOf(this.cur), j = this.chars.indexOf(this.target);
+    const dist = (j - i + n) % n;
+    return dist > 9 ? this.chars[(j - 6 - Math.floor(Math.random() * 3) + n) % n] : this.chars[(i + 1) % n];
+  }
+  async run() {
+    while (this.cur !== this.target) await this.flip(this.next());
+    this.running = false; this.blank();
+  }
+  flip(nx) {
+    const cur = this.cur; this.cur = nx;
+    const S = (h, c) => h.firstChild.textContent = c;
+    if (reduce) { S(this.t, nx); S(this.b, nx); return Promise.resolve(); }
+    const d = 32 + Math.random() * 10;
+    S(this.t, nx); S(this.lt, cur); S(this.lb, nx);
+    this.lt.style.visibility = 'visible';
+    return this.lt.animate([{ transform: 'rotateX(0deg)' }, { transform: 'rotateX(-90deg)' }], { duration: d, easing: 'ease-in' }).finished.then(() => {
+      this.lt.style.visibility = 'hidden'; this.lb.style.visibility = 'visible';
+      return this.lb.animate([{ transform: 'rotateX(90deg)' }, { transform: 'rotateX(0deg)' }], { duration: d, easing: 'ease-out' }).finished;
+    }).then(() => { S(this.b, nx); this.lb.style.visibility = 'hidden'; clack(0.5); });
+  }
+}
+class FlapText {
+  constructor(parent, n, chars, big) { this.f = Array.from({ length: n }, () => new Flap(parent, chars, big)); }
+  show(str, { align = 'left', stagger = 28, tone } = {}) {
+    let s = str.slice(0, this.f.length);
+    if (align === 'center') { const p = Math.floor((this.f.length - s.length) / 2); s = ' '.repeat(p) + s; }
+    if (align === 'right') s = s.padStart(this.f.length);
+    s = s.padEnd(this.f.length);
+    this.f.forEach((fl, i) => { fl.tone(tone); fl.set(s[i], i * stagger); });
+  }
+}
+
+/* ---------- budowa tablicy ---------- */
+const $ = id => document.getElementById(id);
+const nameFT = new FlapText($('name'), 18, CH_NAME, true);
+const statusFT = new FlapText($('status'), 9, CH_UP, false);
+const clockFT = new FlapText($('clock'), 5, CH_UP, false);
+const rows = ROW_TLDS.map(t => {
+  const r = document.createElement('div'); r.className = 'row';
+  const mk = cls => { const d = document.createElement('div'); d.className = 'cells ' + cls; r.appendChild(d); return d; };
+  const dom = new FlapText(mk('c-dom'), 22, CH_NAME), pr = new FlapText(mk('c-pr'), 6, CH_UP), st = new FlapText(mk('c-st'), 9, CH_UP);
+  const dot = document.createElement('div'); dot.className = 'dot'; r.appendChild(dot);
+  const act = document.createElement('div'); act.className = 'act'; act.innerHTML = '<button type="button">—</button>'; r.appendChild(act);
+  $('rows').appendChild(r);
+  return { t, dom, pr, st, dot, btn: act.firstChild };
+});
+
+/* ---------- bęben z końcówkami ---------- */
+const sel = $('sel');
+TLDS.forEach(x => sel.add(new Option(x.t, x.t)));
+const N = TLDS.length, STEP = 360 / N, cyl = $('cyl'), drum = $('drum');
+let faceH = 0, drumAngle = 0, drumIdx = 0, spinRaf = 0;
+function layoutDrum() {
+  const fh = drum.clientHeight * 0.42; faceH = fh;
+  drum.style.setProperty('--fh', fh + 'px');
+  const r = fh / 2 / Math.tan(Math.PI / N) + 1;
+  cyl.innerHTML = '';
+  TLDS.forEach((x, i) => { const f = document.createElement('div'); f.className = 'face'; f.textContent = x.t; f.style.transform = `rotateX(${-i * STEP}deg) translateZ(${r}px)`; cyl.appendChild(f); });
+  cyl.style.transform = `translateZ(${-r}px) rotateX(${drumAngle}deg)`; cyl.dataset.r = r;
+}
+function setDrumAngle(a) {
+  const prevIdx = Math.round(drumAngle / STEP); drumAngle = a;
+  if (Math.round(a / STEP) !== prevIdx) clack(1, 1500);
+  cyl.style.transform = `translateZ(${-cyl.dataset.r}px) rotateX(${a}deg)`;
+}
+function spinTo(idx, extraTurns = 1) {
+  return new Promise(res => {
+    cancelAnimationFrame(spinRaf);
+    const from = drumAngle;
+    let target = idx * STEP; // kąt dla danej ściany
+    while (target <= from + 0.01) target += 360;
+    target += 360 * extraTurns;
+    if (Math.abs(target - from - 360 * (extraTurns + 1)) < 0.01 && extraTurns === 0) target -= 360;
+    const dur = reduce ? 1 : 650 + (target - from) * 1.6, t0 = performance.now();
+    const back = x => { const c1 = 1.2, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+    const tick = now => {
+      const k = Math.min(1, (now - t0) / dur);
+      setDrumAngle(from + (target - from) * back(k));
+      if (k < 1) spinRaf = requestAnimationFrame(tick); else { drumAngle = ((target % 360) + 360) % 360; setDrumAngle(drumAngle); res(); }
+    };
+    spinRaf = requestAnimationFrame(tick);
+    drumIdx = idx; sel.value = TLDS[idx].t;
+  });
+}
+function nudge(d) { const i = (drumIdx + d + N) % N; spinTo(i, 0).then(() => check({ keepDrum: true })); }
+$('up').onclick = () => nudge(-1); $('down').onclick = () => nudge(1);
+let wheelLock = 0;
+drum.addEventListener('wheel', e => { e.preventDefault(); const now = Date.now(); if (now - wheelLock < 260) return; wheelLock = now; nudge(e.deltaY > 0 ? 1 : -1); }, { passive: false });
+let dragY = null;
+drum.addEventListener('pointerdown', e => { dragY = e.clientY; drum.setPointerCapture(e.pointerId); });
+drum.addEventListener('pointermove', e => { if (dragY == null) return; const dy = e.clientY - dragY; if (Math.abs(dy) > 26) { dragY = e.clientY; nudge(dy < 0 ? 1 : -1); } });
+drum.addEventListener('pointerup', () => dragY = null);
+sel.onchange = () => { spinTo(TLDS.findIndex(x => x.t === sel.value), 1).then(() => check({ keepDrum: true })); };
+
+/* ---------- rozmiar komórek ---------- */
+function sizeCells() {
+  const board = document.querySelector('.board'), cs = getComputedStyle(board);
+  const w = board.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const mobile = w < 600, gap = mobile ? 2 : 3, gapm = mobile ? 2 : 4;
+  let cw, cwm;
+  if (mobile) {
+    cw = Math.min(18, (w - 24 - 16 * gap - 30) / 17);
+    cwm = Math.min(30, (w - 24 - 17 * gapm) / 18);
+  } else {
+    cw = Math.max(10, Math.min(21, (w - 24 - 36 * gap - 2 * 18 - 110) / 37));
+    cwm = Math.min(36, (w - 24 - 17 * gapm - 3 * 16 - 40 - 50 - 9 * (cw + gap)) / 22.3);
+  }
+  const r = document.documentElement.style;
+  r.setProperty('--cw', cw + 'px'); r.setProperty('--cwm', cwm + 'px');
+  r.setProperty('--gap', gap + 'px'); r.setProperty('--gapm', gapm + 'px'); r.setProperty('--colgap', Math.round(cw * 0.8) + 'px');
+  layoutDrum();
+}
+
+/* ---------- logika ---------- */
+const q = $('q'), lamp = $('lamp'), offer = $('offer'), cta = $('cta');
+function clean(v) {
+  v = v.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '');
+  const m = TLDS.slice().sort((a, b) => b.t.length - a.t.length).find(x => v.endsWith(x.t));
+  if (m) { v = v.slice(0, -m.t.length); const i = TLDS.indexOf(m); if (i !== drumIdx) spinTo(i, 0); }
+  return v.replace(/[^a-z0-9ąćęłńóśźż-]/g, '').replace(/^-+|-+$/g, '').slice(0, 18);
+}
+function setLamp(s) { lamp.className = 'lamp ' + (s || ''); }
+let seq = 0, typingTimer = 0, current = null;
+
+q.addEventListener('input', () => {
+  const n = clean(q.value);
+  nameFT.show(n, { stagger: 0 });
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => n && check({ keepDrum: true }), 900);
+});
+$('f').addEventListener('submit', e => { e.preventDefault(); clearTimeout(typingTimer); check({ keepDrum: true }); });
+
+async function check({ keepDrum = false } = {}) {
+  const name = clean(q.value) || 'twojafirma';
+  const my = ++seq;
+  nameFT.show(name, { stagger: 18 });
+  setLamp('busy'); statusFT.show('SPRAWDZAM', { tone: 'busy' });
+  cta.classList.remove('on'); offer.innerHTML = '&nbsp;';
+  rows.forEach((r, i) => { r.dom.show(name + r.t, { stagger: 14 }); r.pr.show('', {}); r.st.show('· · ·', { tone: 'mute', stagger: 20 }); r.btn.textContent = '—'; r.btn.className = ''; r.btn.onclick = null; r.dot.className = 'dot busy'; });
+  if (!keepDrum) await spinTo(drumIdx, 1);
+  const tld = TLDS[drumIdx].t;
+  const all = await Promise.all(TLDS.map(x => checkAvailability(name, x.t)));
+  if (my !== seq) return;
+  const avail = Object.fromEntries(TLDS.map((x, i) => [x.t, all[i]]));
+
+  rows.forEach((r, i) => setTimeout(() => {
+    if (my !== seq) return;
+    const ok = avail[r.t];
+    r.pr.show(priceOf(r.t), { align: 'right', stagger: 30 });
+    r.st.show(ok ? 'DOSTĘPNA' : 'ZAJĘTA', { tone: ok ? 'ok' : 'bad', stagger: 30 });
+    r.dot.className = 'dot ' + (ok ? 'ok' : 'bad');
+    r.btn.textContent = ok ? 'Wybierz' : 'Zajęta'; r.btn.className = ok ? 'go' : '';
+    r.btn.onclick = ok ? () => { spinTo(TLDS.findIndex(x => x.t === r.t), 0).then(() => check({ keepDrum: true })); } : null;
+  }, 120 + i * 140));
+
+  const done = (t, suggested) => {
+    current = name + t; setLamp('ok'); statusFT.show('DOSTĘPNA', { tone: 'ok' });
+    offer.innerHTML = (suggested ? `${name}${tld} jest zajęta — proponujemy: ` : '') + `<b>${name}${t}</b> · <span class="price">${priceOf(t)} zł</span> netto / 1. rok`;
+    cta.classList.add('on');
+  };
+  if (avail[tld]) return done(tld, false);
+  setLamp('bad'); statusFT.show('ZAJĘTA', { tone: 'bad' });
+  offer.innerHTML = `<b>${name}${tld}</b> jest już zajęta — szukam wolnej końcówki…`;
+  await new Promise(r => setTimeout(r, 1300));
+  if (my !== seq) return;
+  const alt = TLDS.findIndex(x => avail[x.t]);
+  if (alt < 0) { offer.innerHTML = `Wszystkie końcówki dla <b>${name}</b> są zajęte — spróbuj innej nazwy.`; return; }
+  await spinTo(alt, 0);
+  if (my !== seq) return;
+  done(TLDS[alt].t, true);
+}
+
+cta.onclick = () => toast(`${current} — tu podpinasz koszyk rejestratora (demo)`);
+function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 2600); }
+
+/* ---------- zegar na tablicy ---------- */
+function tickClock() { const d = new Date(); clockFT.show(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, { stagger: 60 }); }
+
+/* ---------- start ---------- */
+sizeCells();
+addEventListener('resize', () => { clearTimeout(window._rs); window._rs = setTimeout(sizeCells, 120); });
+document.fonts && document.fonts.ready.then(sizeCells);
+tickClock(); setInterval(tickClock, 5000);
+rows.forEach(r => { r.dom.show(''); r.st.show(''); });
+setTimeout(() => { q.value = 'twojafirma'; check(); }, 500);
+window.__ready = true;
+</script>
+</body>
+</html>
