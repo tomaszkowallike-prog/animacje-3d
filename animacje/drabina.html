@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drabina na dach – animacja 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0d1726;--panel:rgba(13,23,38,.86);--ink:#f3efe6;--muted:#9fb0c4;--accent:#ff7a1a;--accent2:#ffb36b;--line:rgba(255,255,255,.1)}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  #view{position:fixed;inset:0}
+  #view canvas{display:block;width:100%;height:100%;touch-action:none}
+  .cond{font-family:"Barlow Condensed",Inter,sans-serif}
+
+  .top{position:fixed;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:center;padding:16px 22px;pointer-events:none;background:linear-gradient(rgba(10,19,34,.75),transparent)}
+  .brand{font:700 24px "Barlow Condensed",Inter,sans-serif;text-transform:uppercase;letter-spacing:.02em}
+  .brand span{color:var(--accent)}
+  .top .tel{font-size:14px;color:var(--muted)} .top .tel b{color:var(--ink)}
+
+  #labels{position:fixed;inset:0;pointer-events:none}
+  .lbl{position:absolute;left:0;top:0;white-space:nowrap;font:600 15px "Barlow Condensed",Inter,sans-serif;letter-spacing:.04em;color:var(--accent2);background:rgba(10,19,34,.88);border:1.5px solid var(--accent);border-radius:99px;padding:3px 11px;opacity:0;transition:opacity .35s;will-change:transform}
+  .lbl.on{opacity:1}
+  .lbl.big{font-size:19px;padding:4px 14px;color:#fff;background:var(--accent);border-color:var(--accent)}
+
+  .cap{position:fixed;left:24px;bottom:96px;width:min(430px,calc(100vw - 48px));background:var(--panel);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:18px;padding:18px 20px 16px;transition:opacity .35s,transform .35s}
+  .cap.swap{opacity:0;transform:translateY(8px)}
+  .eyebrow{display:flex;align-items:center;gap:10px;font:600 13px Inter,sans-serif;text-transform:uppercase;letter-spacing:.14em;color:var(--accent)}
+  .eyebrow::before{content:"";width:22px;height:2px;background:var(--accent)}
+  .cap h2{font:700 38px/1 "Barlow Condensed",Inter,sans-serif;text-transform:uppercase;margin:8px 0 8px}
+  .cap p{margin:0 0 10px;color:#cfd8e3;font-size:14.5px;line-height:1.5}
+  .specs{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+  .specs li{display:flex;justify-content:space-between;gap:14px;padding:7px 11px;border-radius:9px;background:rgba(255,255,255,.05);font-size:13.5px;color:var(--muted)}
+  .specs li b{font:600 18px "Barlow Condensed",Inter,sans-serif;color:var(--ink);white-space:nowrap}
+  .live{margin-top:10px;font:600 22px "Barlow Condensed",Inter,sans-serif;color:var(--accent2);min-height:0}
+
+  .bar{position:fixed;left:24px;right:24px;bottom:24px;display:flex;gap:14px;align-items:center}
+  .play{flex:none;width:52px;height:52px;border-radius:50%;border:0;background:var(--accent);color:#1a0d02;cursor:pointer;display:grid;place-items:center}
+  .play svg{width:20px;height:20px}
+  .trackwrap{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:9px 12px 8px;backdrop-filter:blur(10px)}
+  .track{position:relative;display:flex;gap:3px;height:10px;cursor:pointer;touch-action:none}
+  .seg{position:relative;height:100%;background:rgba(255,255,255,.14);border-radius:3px;overflow:hidden}
+  .seg i{position:absolute;inset:0;width:0;background:var(--accent)}
+  .seg.cur{background:rgba(255,122,26,.25)}
+  .meta{display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:var(--muted)}
+  .meta b{color:var(--ink);font-weight:600}
+  .hint{position:fixed;right:24px;bottom:104px;font-size:12.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:6px 12px;transition:opacity .3s}
+  .loading{position:fixed;inset:0;display:grid;place-items:center;font:600 20px "Barlow Condensed",Inter,sans-serif;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;transition:opacity .5s}
+
+  @media (max-width:760px){
+    .top{padding:12px 14px}.brand{font-size:20px}.top .tel{font-size:12px}
+    .cap{left:10px;right:10px;width:auto;bottom:76px;padding:12px 14px 12px;border-radius:14px}
+    .cap h2{font-size:26px;margin:5px 0}
+    .cap p{font-size:13px;margin-bottom:6px}
+    .specs li{padding:5px 9px;font-size:12px}.specs li b{font-size:15px}
+    .bar{left:10px;right:10px;bottom:12px;gap:10px}
+    .play{width:46px;height:46px}
+    .hint{display:none}
+    .lbl{font-size:12.5px;padding:2px 8px}
+    .lbl.big{font-size:15px}
+  }
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="view"></div>
+<div id="labels"></div>
+<div class="loading" id="loading">Ładowanie modelu 3D…</div>
+
+<div class="top">
+  <div class="brand">Drabina<span>na</span>dach</div>
+  <div class="tel">tel. <b>666 699 927</b></div>
+</div>
+
+<div class="cap" id="cap">
+  <div class="eyebrow" id="capE"></div>
+  <h2 id="capT"></h2>
+  <p id="capP"></p>
+  <ul class="specs" id="capS"></ul>
+  <div class="live" id="live"></div>
+</div>
+
+<div class="hint" id="hint">Pauza: przeciągnij, żeby obrócić model · kółko = zoom</div>
+
+<div class="bar">
+  <button class="play" id="play" aria-label="Pauza"></button>
+  <div class="trackwrap">
+    <div class="track" id="track"></div>
+    <div class="meta"><span id="metaL"></span><span id="metaR"></span></div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+
+const $=s=>document.querySelector(s);
+const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+const back=t=>{if(t<=0)return 0;if(t>=1)return 1;const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2);};
+const win=(v,a,b,f=.06)=>clamp((v-a)/f)*clamp((b-v)/f);
+const fmt=n=>n.toLocaleString('pl-PL',{minimumFractionDigits:1,maximumFractionDigits:1});
+
+/* ---------- renderer / scene ---------- */
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=0.92;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+$('#view').appendChild(renderer.domElement);
+
+const scene=new THREE.Scene();
+const bg=document.createElement('canvas');bg.width=4;bg.height=512;
+{const c=bg.getContext('2d'),g=c.createLinearGradient(0,0,0,512);g.addColorStop(0,'#0a1424');g.addColorStop(.5,'#1f3a5a');g.addColorStop(.85,'#55718f');g.addColorStop(1,'#6f88a2');c.fillStyle=g;c.fillRect(0,0,4,512);}
+const bgTex=new THREE.CanvasTexture(bg);bgTex.colorSpace=THREE.SRGBColorSpace;scene.background=bgTex;
+scene.fog=new THREE.Fog(0x2d4866,28,70);
+const pmrem=new THREE.PMREMGenerator(renderer);
+scene.environment=pmrem.fromScene(new RoomEnvironment(),0.04).texture;
+
+const camera=new THREE.PerspectiveCamera(40,1,0.03,200);
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true;controls.enabled=false;controls.minDistance=1;controls.maxDistance=28;controls.maxPolarAngle=Math.PI*0.495;
+
+const hemi=new THREE.HemisphereLight(0xc9dcff,0x27303c,0.9);scene.add(hemi);
+const sun=new THREE.DirectionalLight(0xfff0dc,2.6);sun.position.set(7,11,9);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-9,right:9,top:9,bottom:-3,near:1,far:40});sun.shadow.bias=-0.0004;sun.shadow.normalBias=0.02;
+scene.add(sun);
+const glint=new THREE.PointLight(0xffffff,0,2.2,2);scene.add(glint);
+
+/* ---------- materials ---------- */
+const M={
+  steel:new THREE.MeshStandardMaterial({color:0xc4cdd5,metalness:.9,roughness:.3,envMapIntensity:1.2}),
+  steelDark:new THREE.MeshStandardMaterial({color:0x8d98a3,metalness:.85,roughness:.4}),
+  plaster:new THREE.MeshStandardMaterial({color:0xdccfba,roughness:.92}),
+  eps:new THREE.MeshStandardMaterial({color:0xf1e7c6,roughness:1,transparent:true}),
+  epsFront:null,
+  roof:new THREE.MeshStandardMaterial({color:0x3a4250,roughness:.85}),
+  flash:new THREE.MeshStandardMaterial({color:0x8a939c,metalness:.6,roughness:.45}),
+  ground:new THREE.MeshStandardMaterial({color:0x2a3340,roughness:1}),
+  pave:new THREE.MeshStandardMaterial({color:0x4a5361,roughness:.95}),
+  glass:new THREE.MeshStandardMaterial({color:0x1d2c42,metalness:.4,roughness:.12}),
+  frame:new THREE.MeshStandardMaterial({color:0xf5f2ea,roughness:.6}),
+  door:new THREE.MeshStandardMaterial({color:0x6b4630,roughness:.7}),
+  brick:new THREE.MeshStandardMaterial({color:0x8a4a35,roughness:.9}),
+  pv:new THREE.MeshStandardMaterial({color:0x1b3466,metalness:.6,roughness:.25}),
+  grey:new THREE.MeshStandardMaterial({color:0xc6cbd1,roughness:.6,metalness:.2}),
+  orange:new THREE.MeshStandardMaterial({color:0xff7a1a,roughness:.5,metalness:.2}),
+  dim:new THREE.MeshBasicMaterial({color:0xff7a1a,transparent:true,depthTest:false,opacity:0}),
+};
+M.epsFront=M.plaster.clone();M.epsFront.transparent=true;
+// lock mesh texture
+const lt=document.createElement('canvas');lt.width=lt.height=128;
+{const c=lt.getContext('2d');c.fillStyle='#2c3b52';c.fillRect(0,0,128,128);c.strokeStyle='#4d6585';c.lineWidth=7;
+ for(let i=-128;i<256;i+=22){c.beginPath();c.moveTo(i,0);c.lineTo(i+128,128);c.stroke();c.beginPath();c.moveTo(i,128);c.lineTo(i+128,0);c.stroke();}}
+const lockTex=new THREE.CanvasTexture(lt);lockTex.wrapS=lockTex.wrapT=THREE.RepeatWrapping;lockTex.repeat.set(2,6);lockTex.colorSpace=THREE.SRGBColorSpace;
+M.lock=new THREE.MeshStandardMaterial({map:lockTex,metalness:.5,roughness:.5});
+
+function box(w,h,d,mat,parent,x=0,y=0,z=0,shadow=true){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=shadow;m.receiveShadow=true;parent&&parent.add(m);return m;}
+
+/* ---------- building ---------- */
+const WALL_H=4.0, TOP=5.1;
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(120,120),M.ground);ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+box(14,0.02,3.2,M.pave,scene,0,0.01,1.8,false);
+box(8,WALL_H,6,M.plaster,scene,0,WALL_H/2,-3);
+box(8.02,0.06,6.02,M.roof,scene,0,WALL_H+0.03,-3);
+const ins=new THREE.Mesh(new THREE.BoxGeometry(8,WALL_H,1),[M.eps,M.eps,M.epsFront,M.epsFront,M.epsFront,M.epsFront]);
+ins.position.y=WALL_H/2;ins.castShadow=true;ins.receiveShadow=true;scene.add(ins);
+const flash=box(8.1,0.08,1,M.flash,scene,0,WALL_H+0.04,0);
+const facade=new THREE.Group();scene.add(facade);
+
+function windowAt(x,y,w,h,parent){const g=new THREE.Group();g.position.set(x,y,0);
+  box(w+0.12,h+0.12,0.04,M.frame,g,0,0,0.02,false);box(w,h,0.05,M.glass,g,0,0,0.035,false);
+  box(0.05,h,0.06,M.frame,g,0,0,0.04,false);parent.add(g);return g;}
+const V={dom:new THREE.Group(),blok:new THREE.Group(),hala:new THREE.Group()};
+Object.values(V).forEach(g=>facade.add(g));
+const R={dom:new THREE.Group(),blok:new THREE.Group(),hala:new THREE.Group()};
+Object.values(R).forEach(g=>scene.add(g));
+// dom
+windowAt(-2.5,1.3,1.1,1.2,V.dom);windowAt(-2.5,3.0,1.1,1.0,V.dom);windowAt(2.5,3.0,1.1,1.0,V.dom);
+box(1.0,2.1,0.08,M.door,V.dom,2.5,1.05,0.04);box(1.4,0.08,0.5,M.frame,V.dom,2.5,2.3,0.25);
+box(0.55,1.1,0.55,M.brick,R.dom,-2.6,WALL_H+0.55,-2.6);box(0.7,0.12,0.7,M.brick,R.dom,-2.6,WALL_H+1.12,-2.6);
+for(const x of [1.4,3.0]){const p=box(1.5,0.04,1.0,M.pv,R.dom,x,WALL_H+0.45,-2.6);p.rotation.x=-0.45;box(0.05,0.4,0.05,M.steelDark,R.dom,x,WALL_H+0.2,-2.25);}
+// blok
+for(const x of [-3.1,-1.9,1.9,3.1]) for(const y of [0.9,2.15,3.35]) windowAt(x,y,0.75,0.85,V.blok);
+box(1.0,0.6,0.7,M.grey,R.blok,2.6,WALL_H+0.3,-1.6);
+{const f=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.22,0.02,24),M.steelDark);f.rotation.x=Math.PI/2;f.position.set(2.6,WALL_H+0.3,-1.24);R.blok.add(f);}
+box(1.4,0.9,1.2,M.grey,R.blok,-2.4,WALL_H+0.45,-3.5);
+// hala
+for(let x=-3.85;x<=3.9;x+=0.32) box(0.05,WALL_H-0.05,0.035,M.flash,V.hala,x,WALL_H/2,0.02,false);
+{const d=box(2.2,2.7,0.08,M.grey,V.hala,2.6,1.35,0.06);for(let y=0.3;y<2.7;y+=0.34)box(2.2,0.03,0.1,M.steelDark,V.hala,2.6,y,0.07,false);}
+box(2.4,0.35,0.06,new THREE.MeshStandardMaterial({color:0x9fc8e2,metalness:.3,roughness:.1}),V.hala,-2.4,3.3,0.03,false);
+{const s=box(1.8,0.35,1.3,new THREE.MeshStandardMaterial({color:0xa9d4ee,transparent:true,opacity:.75,metalness:.2,roughness:.1}),R.hala,2.0,WALL_H+0.18,-2.6);}
+const VARC={dom:new THREE.Color(0xdccfba),blok:new THREE.Color(0xc4bcae),hala:new THREE.Color(0x97a2ad)};
+
+/* ---------- ladder ---------- */
+const lad=new THREE.Group();scene.add(lad);
+const RX=0.265;
+function railGeo(){const g=new THREE.BoxGeometry(0.03,1,0.05);g.translate(0,0.5,0);return g;}
+const rails=[-RX,RX].map(x=>{const m=new THREE.Mesh(railGeo(),M.steel);m.position.x=x;m.castShadow=true;m.receiveShadow=true;lad.add(m);return m;});
+// top bend
+const bendH=[-RX,RX].map(x=>{const g=new THREE.BoxGeometry(0.03,0.05,1);g.translate(0,0,-0.5);const m=new THREE.Mesh(g,M.steel);m.position.set(x,TOP-0.025,0);m.castShadow=true;lad.add(m);m.visible=false;return m;});
+const bendV=[-RX,RX].map(x=>{const g=new THREE.BoxGeometry(0.03,1,0.05);g.translate(0,-0.5,0);const m=new THREE.Mesh(g,M.steel);m.position.set(x,TOP,0);m.castShadow=true;lad.add(m);m.visible=false;return m;});
+// rungs with anti-slip teeth
+const rungParts=[new THREE.BoxGeometry(0.5,0.03,0.03)];
+for(let x=-0.235;x<=0.236;x+=0.0235){const t=new THREE.BoxGeometry(0.008,0.007,0.03);t.translate(x,0.018,0);rungParts.push(t);}
+const rungGeo=mergeGeometries(rungParts);
+const RUNG_Y=[];for(let k=1;k*0.27<=WALL_H-0.05;k++)RUNG_Y.push(k*0.27);
+const rungs=RUNG_Y.map(y=>{const m=new THREE.Mesh(rungGeo,M.steel);m.position.y=y;m.castShadow=true;m.visible=false;lad.add(m);return m;});
+// brackets
+const BR_Y=[0.75,2.05,3.35];
+const brackets=[];
+BR_Y.forEach(y=>[-RX,RX].forEach(x=>{
+  const g=new THREE.Group();g.position.set(x,y,0);lad.add(g);
+  const plate=box(0.11,0.18,0.012,M.steelDark,g);
+  const sleeve=box(0.05,0.05,0.14,M.steelDark,g);
+  const armG=new THREE.BoxGeometry(0.036,0.036,1);armG.translate(0,0,0.5);
+  const arm=new THREE.Mesh(armG,M.steel);arm.castShadow=true;g.add(arm);
+  const clamp_=box(0.06,0.07,0.03,M.steelDark,g,0,0,-0.035);
+  const bolts=[];for(const by of [-0.06,0.06]){const b=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.02,10),M.steel);b.rotation.x=Math.PI/2;b.position.y=by;g.add(b);bolts.push(b);}
+  brackets.push({g,plate,sleeve,arm,bolts});
+}));
+// cage
+const CAGE_C=0.265, CAGE_R=0.375, HOOP_Y=[2.5,3.14,3.78,4.42,5.06];
+const hoopGeo=new THREE.TorusGeometry(CAGE_R,0.012,8,64,Math.PI*1.5);hoopGeo.rotateZ(-Math.PI/4);hoopGeo.rotateX(Math.PI/2);hoopGeo.scale(1,3.2,0.55);
+const hoops=HOOP_Y.map(y=>{const g=new THREE.Group();g.position.set(0,y,CAGE_C);const m=new THREE.Mesh(hoopGeo,M.steel);m.castShadow=true;g.add(m);g.visible=false;lad.add(g);return g;});
+const BAR_L=HOOP_Y[4]-HOOP_Y[0];
+const bars=[0,45,90,135,180].map(a=>{const r=a*Math.PI/180;const geo=new THREE.BoxGeometry(0.035,1,0.006);geo.translate(0,0.5,0);
+  const m=new THREE.Mesh(geo,M.steel);m.rotation.y=Math.PI/2-r;m.position.set(CAGE_R*Math.cos(r),HOOP_Y[0],CAGE_C+CAGE_R*Math.sin(r));m.castShadow=true;m.visible=false;lad.add(m);return m;});
+// lock: hinged cover plate under the first cage hoop (closes the cage from below)
+const LOCK_Y=HOOP_Y[0]-0.035, HINGE_Z=CAGE_C+CAGE_R+0.01;
+const lockPivot=new THREE.Group();lockPivot.position.set(0,LOCK_Y,HINGE_Z);lad.add(lockPivot);
+const lockShape=new THREE.Shape();
+{const r=CAGE_R+0.01,c=CAGE_C,s0=0.035,th0=Math.asin((s0-c)/r),n=48;
+ const pts=[];for(let i=0;i<=n;i++){const th=th0+(Math.PI-2*th0)*i/n;pts.push([r*Math.cos(th),c+r*Math.sin(th)]);}
+ // arc goes from right (th0) over far side to left; make it pass through the far side (s>c)
+ lockShape.moveTo(pts[0][0],pts[0][1]);pts.forEach(p=>lockShape.lineTo(p[0],p[1]));lockShape.lineTo(pts[0][0],pts[0][1]);
+ const hole=new THREE.Path();hole.absarc(0,c,0.04,0,Math.PI*2,true);lockShape.holes.push(hole);}
+const lockGeo=new THREE.ExtrudeGeometry(lockShape,{depth:0.006,bevelEnabled:false,curveSegments:48});
+lockGeo.rotateX(Math.PI/2);lockGeo.translate(0,0,-HINGE_Z);
+const lockMat=new THREE.MeshStandardMaterial({color:0xb7c0c8,metalness:.6,roughness:.45,side:THREE.DoubleSide,emissive:0x5b636b,envMapIntensity:1.4});
+const lockPlate=new THREE.Mesh(lockGeo,lockMat);lockPlate.castShadow=true;lockPlate.receiveShadow=false;lockPivot.add(lockPlate);
+{const h=new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.014,0.16,12),M.steelDark);h.rotation.z=Math.PI/2;lockPivot.add(h);
+ const lug=box(0.16,0.05,0.01,M.steelDark,lad,0,LOCK_Y+0.02,HINGE_Z+0.004);}
+const padlock=new THREE.Group();padlock.position.set(0,-0.05,0.035-HINGE_Z+0.02);lockPivot.add(padlock);
+box(0.05,0.03,0.006,M.steelDark,padlock,0,0.035,0);
+box(0.07,0.06,0.03,M.orange,padlock,0,-0.02,0);
+{const sh=new THREE.Mesh(new THREE.TorusGeometry(0.022,0.006,8,20,Math.PI),M.steel);sh.position.y=0.01;padlock.add(sh);}
+lockPivot.visible=false;
+
+/* ---------- dimension helpers ---------- */
+const dimGroups=[];
+function dim(parent){const g=new THREE.Group();parent.add(g);g.renderOrder=999;
+  const mat=M.dim.clone();
+  const line=new THREE.Mesh(new THREE.CylinderGeometry(0.007,0.007,1,8),mat);line.renderOrder=999;
+  const e1=new THREE.Mesh(new THREE.SphereGeometry(0.022,12,8),mat),e2=e1.clone();e1.renderOrder=e2.renderOrder=999;
+  g.add(line,e1,e2);const o={g,mat,anchor:new THREE.Object3D(),target:0};g.add(o.anchor);
+  o.set=(a,b)=>{const A=new THREE.Vector3(...a),B=new THREE.Vector3(...b);const mid=A.clone().add(B).multiplyScalar(.5);
+    line.position.copy(mid);const len=A.distanceTo(B);line.scale.set(1,len,1);
+    line.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),B.clone().sub(A).normalize());
+    e1.position.copy(A);e2.position.copy(B);o.anchor.position.copy(mid);};
+  dimGroups.push(o);return o;}
+
+/* ---------- weather ---------- */
+const RAIN_N=1100;
+const rainPos=new Float32Array(RAIN_N*6),rainSeed=[];
+for(let i=0;i<RAIN_N;i++)rainSeed.push([Math.random()*12-6,Math.random()*7-2,Math.random()]);
+const rainGeo=new THREE.BufferGeometry();rainGeo.setAttribute('position',new THREE.BufferAttribute(rainPos,3));
+const rain=new THREE.LineSegments(rainGeo,new THREE.LineBasicMaterial({color:0xa8d4ff,transparent:true,opacity:0}));rain.frustumCulled=false;scene.add(rain);
+const SNOW_N=900;const snowPos=new Float32Array(SNOW_N*3),snowSeed=[];
+for(let i=0;i<SNOW_N;i++)snowSeed.push([Math.random()*12-6,Math.random()*7-2,Math.random()]);
+const sc=document.createElement('canvas');sc.width=sc.height=32;{const c=sc.getContext('2d'),g=c.createRadialGradient(16,16,0,16,16,16);g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(1,'rgba(255,255,255,0)');c.fillStyle=g;c.fillRect(0,0,32,32);}
+const snowGeo=new THREE.BufferGeometry();snowGeo.setAttribute('position',new THREE.BufferAttribute(snowPos,3));
+const snow=new THREE.Points(snowGeo,new THREE.PointsMaterial({size:0.07,map:new THREE.CanvasTexture(sc),transparent:true,depthWrite:false,opacity:0}));snow.frustumCulled=false;scene.add(snow);
+
+/* ---------- labels ---------- */
+const labelsEl=$('#labels');const labels=[];
+function label(text,obj,show,opts={}){const el=document.createElement('div');el.className='lbl'+(opts.big?' big':'');el.textContent=text;labelsEl.appendChild(el);
+  const L={el,obj,show,dx:opts.dx??0,dy:opts.dy??-22,text};labels.push(L);return L;}
+function anchor(parent,x,y,z){const o=new THREE.Object3D();o.position.set(x,y,z);parent.add(o);return o;}
+
+/* ---------- timeline ---------- */
+const S=[
+ {d:5, e:'Producent z Poznania', t:'Drabina na dach', p:'Zobacz krok po kroku, z czego składa się bezpieczne, stałe wejście na dach.', s:[['Ocynk ogniowy','✓'],['Konstrukcja modułowa','✓'],['Zgodność z normami DIN / PN-EN ISO','✓']],
+  cam:[[10,4.2,15,0,2.3,0],[6,3.4,11.5,0,2.5,0]]},
+ {d:6, e:'01 · Podłużnice', t:'Sztywny szkielet', p:'Dwie podłużnice ze stalowego profilu tworzą konstrukcję nośną drabiny.', s:[['Profil podłużnic','30 × 50 mm'],['Szerokość całkowita','560 mm'],['Układ','30 + 500 + 30']],
+  cam:[[4.2,2.8,8.6,0,2.5,0.2],[2.6,2.0,7.4,0,2.4,0.2]]},
+ {d:6, e:'02 · Szczeble', t:'Co 270 milimetrów', p:'Szczeble jednorzędowe w stałym rozstawie. Długość drabiny dopasowujemy do budynku.', s:[['Rozstaw szczebli','270 mm'],['Długość szczebla','500 mm'],['Konstrukcja','modułowa']],
+  cam:[[-2.4,1.2,4.6,0,1.7,0.2],[-1.6,2.6,4.4,0,2.3,0.2]]},
+ {d:6, e:'03 · Antypoślizg', t:'Pewny krok w deszczu', p:'Ryflowana powierzchnia szczebla trzyma but także wtedy, gdy jest mokro.', s:[['Wymiar szczebla','2×30×30×30 mm'],['Powierzchnia','antypoślizgowa']],
+  cam:[[0.75,1.72,1.05,0,1.36,0.2],[-0.55,1.62,0.95,0.02,1.36,0.2]]},
+ {d:7, e:'04 · Ocynk ogniowy', t:'Deszcz, śnieg, UV. Bez rdzy.', p:'Wszystkie elementy są ocynkowane ogniowo. Powłoka cynku chroni stal przed korozją przez cały rok.', s:[['Zabezpieczenie','ocynk ogniowy'],['Odporność','woda · mróz · UV']],
+  cam:[[3.6,2.2,6.6,0,2.5,0.2],[-3.4,3.0,6.4,0,2.6,0.2]]},
+ {d:8, e:'05 · Wsporniki', t:'Regulowana odległość od ściany', p:'Teleskopowe wsporniki omijają ocieplenie. Ocieplenie pokazujemy tu półprzezroczyście.', s:[['Zakres S','16–26 cm'],['Zakres M','26–36 cm'],['Zakres L','36–46 cm'],['Nietypowe','na zamówienie']],
+  cam:[[3.2,2.6,1.5,0,2.0,0.2],[2.6,2.3,2.4,0,2.0,0.25]]},
+ {d:8, e:'06 · Kosz ochronny', t:'Ochrona na całej wysokości', p:'Kosz otacza drabinę i zmniejsza ryzyko upadku do tyłu. Drabina jest dostępna z koszem lub bez.', s:[['Średnica kosza','Ø 75 cm'],['Rozstaw obręczy','maks. 0,64 m'],['Początek kosza','2,2–3 m nad ziemią']],
+  cam:[[3.4,1.8,5.6,0,3.2,0.5],[-2.2,5.6,4.8,0,3.7,0.4]]},
+ {d:7, e:'07 · Wyjście na dach', t:'Min. 1,1 m ponad krawędź', p:'Podłużnice wychodzą ponad dach i przechodzą nad krawędzią. Przy wejściu na dach jest się czego złapać.', s:[['Wyjście ponad dach','min. 1,1 m'],['Opcja','przejście przez attykę']],
+  cam:[[2.6,4.7,3.6,0,4.5,0.1],[1.9,5.9,2.9,0,4.55,-0.1]]},
+ {d:6, e:'08 · Blokada', t:'Tylko dla uprawnionych', p:'Ocynkowana pokrywa na zawiasie zamyka kosz od dołu, pod pierwszą obręczą, i jest zabezpieczona kłódką. Na dach nie wejdą dzieci ani osoby postronne.', s:[['Blokada dostępu','pokrywa z kłódką'],['Montaż','pod pierwszą obręczą kosza'],['Dla kogo','wspólnoty, zarządcy, przemysł']],
+  cam:[[2.0,0.9,3.2,0,2.35,0.4],[-1.6,0.7,2.9,0,2.4,0.4]]},
+ {d:9, e:'09 · Zastosowania', t:'Jeden system, wiele budynków', p:'Domy jednorodzinne, budynki wielorodzinne, hale i obiekty przemysłowe. Dostępna jest też wersja ewakuacyjna.', s:[],
+  cam:[[9,4,13,0,2.4,0],[-8,4.6,12,0,2.4,0]]},
+ {d:6, e:'10 · Normy', t:'Zgodność z normami', p:'Produkcja w Poznaniu, zgodnie z polskimi wymogami BHP.', s:[['DIN 18799-1','drabiny stałe'],['DIN 14091-1','ewakuacyjne'],['PN-EN ISO 14122-4','stałe środki dostępu']],
+  cam:[[5.5,2.4,8.4,0,2.7,0],[2.6,5.2,7.6,0,2.8,0]]},
+ {d:9, e:'Zamów drabinę', t:'Podaj wysokość ściany', p:'Długość drabiny = wysokość ściany + min. 1,1 m. Wszystkie elementy i śruby są w zestawie, a montaż nie wymaga specjalistycznych narzędzi.', s:[['Telefon','666 699 927'],['E-mail','biuro@drabinanadach.pl'],['Strona','drabinanadach.pl']],
+  cam:[[7,3.4,10,0,2.6,0],[-6.5,3.0,10,0,2.6,0]]},
+];
+const T=[0];S.forEach(s=>T.push(T[T.length-1]+s.d));const TEND=T[T.length-1];
+const sceneAt=t=>{for(let i=S.length-1;i>=0;i--)if(t>=T[i])return i;return 0;};
+
+/* ---------- dims & labels setup ---------- */
+const dW=dim(lad);dW.set([-0.28,0.55,0.07],[0.28,0.55,0.07]);
+const d270=dim(lad);d270.set([-0.4,0.27,0.02],[-0.4,0.54,0.02]);
+const dHoop=dim(lad);dHoop.set([-CAGE_R,3.3,CAGE_C],[CAGE_R,3.3,CAGE_C]);
+const dGap=dim(lad);dGap.set([0.52,3.14,CAGE_C],[0.52,3.78,CAGE_C]);
+const dStart=dim(lad);dStart.set([-0.62,0.02,CAGE_C],[-0.62,2.5,CAGE_C]);
+const dExit=dim(lad);dExit.set([0.5,WALL_H,0.02],[0.5,TOP,0.02]);
+const dLen=dim(lad);dLen.set([-0.62,0.02,0.02],[-0.62,TOP,0.02]);
+const dBr=dim(lad); // set per frame
+
+const inS=(i,a=.07,b=.96)=>t=>{const k=sceneAt(t);if(k!==i)return false;const u=(t-T[i])/S[i].d;return u>=a&&u<=b;};
+label('560 mm',dW.anchor,inS(1,.45),{dy:-24});
+label('profil 30×50 mm',anchor(lad,RX,1.5,0),inS(1,.5),{dx:70,dy:0});
+label('270 mm',d270.anchor,inS(2,.3),{dx:-48,dy:0});
+label('szczebel 500 mm',anchor(lad,0,0.81,0),inS(2,.45),{dy:-22});
+label('ryflowanie antypoślizgowe',anchor(lad,0.1,1.39,0),inS(3,.15),{dy:-34});
+label('2×30×30×30 mm',anchor(lad,-0.12,1.34,0.02),inS(3,.35),{dy:44});
+const wLbl=label('☔ deszcz',anchor(lad,0,4.4,0.3),inS(4,.04),{big:true,dy:-30});
+label('ocynk ogniowy',anchor(lad,RX,2.6,0),inS(4,.1),{dx:80,dy:0});
+const brLbl=label('20 cm',dBr.anchor,inS(5,.12),{big:true,dy:-30});
+label('Ø 75 cm',dHoop.anchor,inS(6,.5),{dy:-22});
+label('≤ 0,64 m',dGap.anchor,inS(6,.6),{dx:52,dy:0});
+label('2,2–3 m',dStart.anchor,inS(6,.4),{dx:-46,dy:0});
+label('min. 1,1 m',dExit.anchor,inS(7,.25),{big:true,dx:66,dy:0});
+label('pokrywa zamykana od dołu',anchor(lad,0,LOCK_Y-0.05,CAGE_C),inS(8,.55),{dy:40});
+const vLbl=label('Dom jednorodzinny',anchor(scene,0,WALL_H+1.6,0),inS(9,.05),{big:true});
+label('L = wysokość + 1,1 m',dLen.anchor,inS(11,.1),{dx:-90,dy:0});
+const normAnch=anchor(lad,0,TOP+0.4,0);
+
+
+const dimShow=[[dW,inS(1,.45)],[d270,inS(2,.3)],[dHoop,inS(6,.5)],[dGap,inS(6,.6)],[dStart,inS(6,.4)],[dExit,inS(7,.25)],[dLen,inS(11,.1)],[dBr,inS(5,.12)]];
+
+/* ---------- state from time ---------- */
+const VNAMES={dom:'Dom jednorodzinny',blok:'Budynek wielorodzinny',hala:'Hala / obiekt przemysłowy'};
+let curVar='dom';
+function apply(t,dt){
+  const k=sceneAt(t);
+  // distance from wall
+  let d=0.20;
+  if(t>=T[5]){const v=(t-T[5])/S[5].d;d=0.20+(0.41-0.20)*ease(clamp((v-.22)/.3))+(0.31-0.41)*ease(clamp((v-.66)/.22));}
+  const insT=d-0.08;
+  lad.position.z=d;ins.scale.z=insT;ins.position.z=insT/2;facade.position.z=insT;
+  flash.scale.z=insT+0.12;flash.position.z=(insT+0.12)/2-0.1;
+  const xr=k===5?win((t-T[5])/S[5].d,.05,.97,.08):0;
+  const op=1-0.72*xr;M.eps.opacity=op;M.epsFront.opacity=op;M.eps.depthWrite=M.epsFront.depthWrite=op>0.99;
+
+  // rails
+  const g1=ease(clamp((t-T[1]-0.3)/2.6));
+  rails.forEach(r=>{r.visible=g1>0;r.scale.y=Math.max(1e-4,TOP*g1);});
+  // brackets
+  brackets.forEach((b,i)=>{const s=back(clamp((t-T[1]-2.9-(i>>1)*0.25)/0.6));b.g.visible=s>0;b.g.scale.setScalar(Math.max(1e-4,s));
+    b.plate.position.z=-d+0.006;b.sleeve.position.z=-d+0.08;b.arm.position.z=-d+0.012;b.arm.scale.z=Math.max(0.01,d-0.05);
+    b.bolts.forEach(bb=>bb.position.z=-d+0.016);});
+  // rungs
+  rungs.forEach((r,i)=>{const s=clamp((t-T[2]-0.3-i*0.3)/0.45),e=ease(s);r.visible=s>0;r.position.y=RUNG_Y[i]+(1-e)*0.35;r.position.z=(1-e)*0.5;r.rotation.y=(1-e)*0.9;});
+  // cage
+  hoops.forEach((h,i)=>{const s=back(clamp((t-T[6]-0.5-i*0.45)/0.6));h.visible=s>0;h.scale.setScalar(Math.max(1e-4,s));});
+  const bs=ease(clamp((t-T[6]-2.9)/1.4));bars.forEach(b=>{b.visible=bs>0;b.scale.y=Math.max(1e-4,BAR_L*bs);});
+  // top bend
+  const b1=ease(clamp((t-T[7]-0.6)/1.3)),b2=ease(clamp((t-T[7]-1.8)/0.9));
+  bendH.forEach(m=>{m.visible=b1>0;m.scale.z=Math.max(1e-4,(d+0.7)*b1);});
+  bendV.forEach(m=>{m.visible=b2>0;m.scale.y=Math.max(1e-4,(TOP-WALL_H-0.06)*b2);m.position.z=-(d+0.7)+0.015;});
+  // lock
+  const la=clamp((t-T[8]-0.2)/0.5);lockPivot.visible=la>0;lockPivot.scale.setScalar(Math.max(1e-4,back(la)));
+  lockPivot.rotation.x=lerp(-Math.PI/2+0.06,0,ease(clamp((t-T[8]-1.3)/1.6)));
+  const pl=back(clamp((t-T[8]-3.2)/0.5));padlock.visible=pl>0;padlock.scale.setScalar(Math.max(1e-4,pl));
+
+  // variants
+  let v='dom';
+  if(k===9){const u=(t-T[9])/S[9].d;v=u<.34?'dom':u<.67?'blok':'hala';}
+  else if(k>=10)v='blok';
+  curVar=v;
+  for(const n in V){V[n].visible=n===v;R[n].visible=n===v;}
+  M.plaster.color.lerp(VARC[v],dt>0?clamp(dt*5):1);M.epsFront.color.copy(M.plaster.color);
+  vLbl.el.textContent=VNAMES[v];
+
+  // weather + glint
+  let rainA=0,snowA=0,sunA=0;
+  if(k===4){const u=(t-T[4])/S[4].d;rainA=win(u,0,.36);snowA=win(u,.34,.68);sunA=win(u,.66,1.01);
+    wLbl.el.textContent=u<.35?'☔ deszcz':u<.67?'❄ śnieg i mróz':'☀ promieniowanie UV';
+    glint.intensity=6;glint.position.set(0,((t-T[4])*1.5)%5.6-0.2,d+0.35);}
+  else glint.intensity=0;
+  rain.material.opacity=rainA*.55;snow.material.opacity=snowA;
+  rain.visible=rainA>0;snow.visible=snowA>0;
+  if(rainA>0){for(let i=0;i<RAIN_N;i++){const [x,z,s]=rainSeed[i];const y=7.5-((s*7.5+t*9)%7.5);const o=i*6;
+    rainPos[o]=x;rainPos[o+1]=y;rainPos[o+2]=z;rainPos[o+3]=x-0.02;rainPos[o+4]=y+0.28;rainPos[o+5]=z;}rainGeo.attributes.position.needsUpdate=true;}
+  if(snowA>0){for(let i=0;i<SNOW_N;i++){const [x,z,s]=snowSeed[i];const o=i*3;
+    snowPos[o]=x+Math.sin(t*1.2+s*20)*0.15;snowPos[o+1]=7.5-((s*7.5+t*0.7)%7.5);snowPos[o+2]=z;}snowGeo.attributes.position.needsUpdate=true;}
+  const dull=Math.max(rainA,snowA);
+  sun.intensity=2.6-1.5*dull+1.6*sunA;sun.color.setRGB(1,lerp(0.94,0.82,sunA),lerp(0.86,0.6,sunA));
+  hemi.intensity=0.9-0.25*dull;
+
+  // dims
+  dBr.set([0.42,BR_Y[1],-d],[0.42,BR_Y[1],0]);
+  const cm=Math.round(d*100);brLbl.el.textContent=`${cm} cm · zakres ${cm<26?'16–26':cm<36?'26–36':'36–46'} cm`;
+  dimShow.forEach(([o,f])=>{o.target=f(t)?1:0;o.mat.opacity=lerp(o.mat.opacity,o.target,dt>0?clamp(dt*7):1);o.g.visible=o.mat.opacity>0.01;});
+
+  // caption live
+  const live=$('#live');
+  if(k===5)live.textContent=`Odległość od ściany: ${cm} cm`;
+  else if(k===9)live.textContent='▸ '+VNAMES[v];
+  else live.textContent='';
+}
+
+/* ---------- camera from time ---------- */
+const P0=new THREE.Vector3(),P1=new THREE.Vector3(),T0=new THREE.Vector3(),T1=new THREE.Vector3();
+function camPose(i,u,outP,outT){const [a,b]=S[i].cam;const e=ease(clamp(u));
+  outP.set(lerp(a[0],b[0],e),lerp(a[1],b[1],e),lerp(a[2],b[2],e));outT.set(lerp(a[3],b[3],e),lerp(a[4],b[4],e),lerp(a[5],b[5],e));}
+function cameraAt(t){const i=sceneAt(t),u=(t-T[i])/S[i].d;camPose(i,u,P0,T0);
+  const bl=1.6;if(t-T[i]<bl){const prev=i>0?i-1:S.length-1;camPose(prev,1,P1,T1);const k=ease((t-T[i])/bl);if(i>0||t>0.01){P0.lerpVectors(P1,P0,k);T0.lerpVectors(T1,T0,k);}}
+  camera.position.copy(P0);camera.lookAt(T0);return T0;}
+
+/* ---------- UI ---------- */
+const track=$('#track');
+const segs=S.map((s,i)=>{const d=document.createElement('div');d.className='seg';d.style.flex=s.d;d.innerHTML='<i></i>';d.title=s.e;track.appendChild(d);return d;});
+let t=0,playing=true,lastScene=-1;
+const playBtn=$('#play');
+const ICON_PAUSE='<svg viewBox="0 0 20 20"><rect x="4" y="3" width="4" height="14" rx="1" fill="currentColor"/><rect x="12" y="3" width="4" height="14" rx="1" fill="currentColor"/></svg>';
+const ICON_PLAY='<svg viewBox="0 0 20 20"><path d="M5 3 L17 10 L5 17 Z" fill="currentColor"/></svg>';
+function setPlaying(p){playing=p;playBtn.innerHTML=p?ICON_PAUSE:ICON_PLAY;playBtn.setAttribute('aria-label',p?'Pauza':'Odtwórz');
+  controls.enabled=!p;$('#hint').style.opacity=p?0:1;
+  if(!p){controls.target.copy(cameraAt(t));controls.update();}}
+playBtn.onclick=()=>setPlaying(!playing);
+renderer.domElement.addEventListener('pointerdown',()=>{if(playing)setPlaying(false);});
+addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();setPlaying(!playing);}});
+let dragging=false;
+function seek(e){const r=track.getBoundingClientRect();t=clamp((e.clientX-r.left)/r.width)*TEND*0.9999;if(!playing){cameraAt(t);controls.target.copy(T0);}}
+track.addEventListener('pointerdown',e=>{dragging=true;track.setPointerCapture(e.pointerId);seek(e);});
+track.addEventListener('pointermove',e=>{if(dragging)seek(e);});
+track.addEventListener('pointerup',()=>{dragging=false;});
+
+function updateCaption(i){const c=$('#cap');c.classList.add('swap');
+  setTimeout(()=>{const s=S[lastScene];$('#capE').textContent=s.e;$('#capT').textContent=s.t;$('#capP').textContent=s.p;
+    $('#capS').innerHTML=s.s.map(([a,b])=>`<li><span>${a}</span><b>${b}</b></li>`).join('');c.classList.remove('swap');},200);}
+const mm=s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+
+/* ---------- resize / loop ---------- */
+function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h);camera.aspect=w/h;
+  camera.fov=w/h<1?Math.min(68,40/(w/h)*0.72):40;
+  if(w>900){const off=Math.min(240,w*0.15);camera.setViewOffset(w,h,-off,0,w,h);}else if(w/h<1){camera.setViewOffset(w,h,0,h*0.17,w,h);}else camera.clearViewOffset();
+  camera.updateProjectionMatrix();}
+addEventListener('resize',resize);resize();
+
+const v3=new THREE.Vector3();
+function placeLabels(){const w=innerWidth,h=innerHeight;
+  labels.forEach(L=>{const on=L.show(t);L.el.classList.toggle('on',on);if(!on&&L.el.style.opacity==='0')return;
+    L.obj.getWorldPosition(v3);v3.project(camera);
+    if(v3.z>1){L.el.classList.remove('on');return;}
+    const x=(v3.x+1)/2*w+L.dx,y=(1-v3.y)/2*h+L.dy;
+    L.el.style.transform=`translate(${x}px,${y}px) translate(-50%,-50%)`;});}
+
+const clock=new THREE.Clock();
+function frame(){requestAnimationFrame(frame);
+  const dt=Math.min(clock.getDelta(),0.1);
+  if(playing&&!dragging){t+=dt;if(t>=TEND)t=0;}
+  apply(t,dt);
+  if(playing||dragging){if(!playing&&dragging){/* keep orbit target synced while scrubbing */}
+    if(playing)cameraAt(t);else{cameraAt(t);controls.target.copy(T0);}}
+  else controls.update();
+  const i=sceneAt(t);if(i!==lastScene){updateCaption(i);lastScene=i;}
+  segs.forEach((s,j)=>{const f=clamp((t-T[j])/S[j].d);s.firstChild.style.width=(f*100)+'%';s.classList.toggle('cur',j===i);});
+  $('#metaL').innerHTML=`<b>${S[i].e}</b>`;$('#metaR').textContent=`${mm(t)} / ${mm(TEND)}`;
+  renderer.render(scene,camera);placeLabels();}
+setPlaying(true);apply(0,0);cameraAt(0);
+$('#loading').style.opacity=0;setTimeout(()=>$('#loading').remove(),600);
+window.__seek=(s)=>{t=s;};window.__pause=()=>setPlaying(false);
+frame();
+</script>
+</body>
+</html>
