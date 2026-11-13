@@ -99,7 +99,9 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.enableZoom = false; controls.enablePan = false;
 controls.minPolarAngle = 0.5; controls.maxPolarAngle = 1.45;
 let userZoom = 1;
-renderer.domElement.addEventListener('wheel', e => { e.preventDefault(); userZoom = clamp(userZoom * (1 + e.deltaY * 0.001), 0.5, 1.8); }, { passive: false });
+const wheelDelta = e => { let d = e.deltaY; if (e.deltaMode === 1) d *= 16; else if (e.deltaMode === 2) d *= innerHeight; return Math.max(-120, Math.min(120, d)); };
+let zoomTarget = 1;
+renderer.domElement.addEventListener('wheel', e => { e.preventDefault(); zoomTarget = clamp(zoomTarget * Math.exp(wheelDelta(e) * 0.0012), 0.5, 1.8); }, { passive: false });
 scene.add(new THREE.HemisphereLight(0xffffff, 0xe9e4da, 0.9));
 const sun = new THREE.DirectionalLight(0xfff4e6, 2.2);
 sun.position.set(14, 22, 16); sun.castShadow = true;
@@ -586,6 +588,7 @@ resize();
 let last = performance.now();
 function tick(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  userZoom += (zoomTarget - userZoom) * (1 - Math.exp(-dt * 7));
   if (playing && !scrubbing) TT = (TT + dt * speed) % L;
   if (!scrubbing) scrub.value = Math.round(TT / L * 1000);
   controls.update(); apply(TT);

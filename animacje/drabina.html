@@ -126,7 +126,11 @@ scene.environment=pmrem.fromScene(new RoomEnvironment(),0.04).texture;
 
 const camera=new THREE.PerspectiveCamera(40,1,0.03,200);
 const controls=new OrbitControls(camera,renderer.domElement);
-controls.enableDamping=true;controls.enabled=false;controls.minDistance=1;controls.maxDistance=28;controls.maxPolarAngle=Math.PI*0.495;
+controls.enableDamping=true;controls.enabled=false;controls.minDistance=1;controls.maxDistance=28;controls.maxPolarAngle=Math.PI*0.495;controls.enableZoom=false;
+const wheelDelta = e => { let d = e.deltaY; if (e.deltaMode === 1) d *= 16; else if (e.deltaMode === 2) d *= innerHeight; return Math.max(-120, Math.min(120, d)); };
+let zK=1,zT=1,baseDist=10;
+renderer.domElement.addEventListener('wheel',e=>{e.preventDefault();zT=Math.max(0.3,Math.min(2.2,zT*Math.exp(wheelDelta(e)*0.0012)));},{passive:false});
+
 
 const hemi=new THREE.HemisphereLight(0xc9dcff,0x27303c,0.9);scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xfff0dc,2.6);sun.position.set(7,11,9);sun.castShadow=true;
@@ -425,6 +429,7 @@ function camPose(i,u,outP,outT){const [a,b]=S[i].cam;const e=ease(clamp(u));
   outP.set(lerp(a[0],b[0],e),lerp(a[1],b[1],e),lerp(a[2],b[2],e));outT.set(lerp(a[3],b[3],e),lerp(a[4],b[4],e),lerp(a[5],b[5],e));}
 function cameraAt(t){const i=sceneAt(t),u=(t-T[i])/S[i].d;camPose(i,u,P0,T0);
   const bl=1.6;if(t-T[i]<bl){const prev=i>0?i-1:S.length-1;camPose(prev,1,P1,T1);const k=ease((t-T[i])/bl);if(i>0||t>0.01){P0.lerpVectors(P1,P0,k);T0.lerpVectors(T1,T0,k);}}
+  baseDist=P0.distanceTo(T0);P0.sub(T0).multiplyScalar(zK).add(T0);
   camera.position.copy(P0);camera.lookAt(T0);return T0;}
 
 /* ---------- UI ---------- */
@@ -470,10 +475,11 @@ const clock=new THREE.Clock();
 function frame(){requestAnimationFrame(frame);
   const dt=Math.min(clock.getDelta(),0.1);
   if(playing&&!dragging){t+=dt;if(t>=TEND)t=0;}
+  zK+=(zT-zK)*(1-Math.exp(-dt*7));
   apply(t,dt);
   if(playing||dragging){if(!playing&&dragging){/* keep orbit target synced while scrubbing */}
     if(playing)cameraAt(t);else{cameraAt(t);controls.target.copy(T0);}}
-  else controls.update();
+  else{controls.update();const off=camera.position.clone().sub(controls.target);off.setLength(Math.max(1,baseDist*zK));camera.position.copy(controls.target).add(off);}
   const i=sceneAt(t);if(i!==lastScene){updateCaption(i);lastScene=i;}
   segs.forEach((s,j)=>{const f=clamp((t-T[j])/S[j].d);s.firstChild.style.width=(f*100)+'%';s.classList.toggle('cur',j===i);});
   $('#metaL').innerHTML=`<b>${S[i].e}</b>`;$('#metaR').textContent=`${mm(t)} / ${mm(TEND)}`;

@@ -344,7 +344,7 @@ const sun=new THREE.DirectionalLight(0xfff3e2,2.4);sun.position.set(-14,24,17);
 sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-24,right:24,top:24,bottom:-24,near:1,far:80});sun.shadow.bias=-.0004;sun.shadow.normalBias=.03;
 scene.add(sun);
 const camera=new THREE.PerspectiveCamera(38,1,.1,300);camera.position.set(26,19,30);
-const controls=new OrbitControls(camera,canvas);controls.enableDamping=true;controls.maxPolarAngle=1.48;controls.minDistance=5;controls.maxDistance=70;controls.target.set(0,0,1.5);
+const controls=new OrbitControls(camera,canvas);controls.enableDamping=true;controls.maxPolarAngle=1.48;controls.minDistance=5;controls.maxDistance=70;controls.target.set(0,0,1.5);controls.enableZoom=false;
 
 /* helpers */
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -644,6 +644,14 @@ new ResizeObserver(resize).observe(viewer);resize();
 
 /* loop */
 const clock=new THREE.Clock();let first=true;
+const wheelDelta = e => { let d = e.deltaY; if (e.deltaMode === 1) d *= 16; else if (e.deltaMode === 2) d *= innerHeight; return Math.max(-120, Math.min(120, d)); };
+let zoomTarget=null;const zClock=new THREE.Clock();
+canvas.addEventListener('wheel',e=>{e.preventDefault();const cur=camera.position.distanceTo(controls.target);
+ zoomTarget=Math.max(5,Math.min(70,(zoomTarget??cur)*Math.exp(wheelDelta(e)*0.0012)));},{passive:false});
+(function zoomLoop(){requestAnimationFrame(zoomLoop);const dt=Math.min(zClock.getDelta(),.05);
+ if(zoomTarget==null)return;if(fly){zoomTarget=null;return;}
+ const off=camera.position.clone().sub(controls.target),L=off.length(),nL=L+(zoomTarget-L)*(1-Math.exp(-dt*7));
+ off.setLength(nL);camera.position.copy(controls.target).add(off);if(Math.abs(nL-zoomTarget)<.01)zoomTarget=null;})();
 function loop(){const dt=Math.min(clock.getDelta(),.05);
  if(playing){P+=dt/DUR;if(P>=N){P=N;playing=false;updPlay();}}
  else if(target!==null){const d=target-P,step=dt/DUR*1.25;if(Math.abs(d)<=step){P=target;target=null;}else P+=Math.sign(d)*step;}

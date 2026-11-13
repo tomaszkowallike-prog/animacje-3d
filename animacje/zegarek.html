@@ -65,7 +65,9 @@ camera.position.set(0, 18, 100);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.enableZoom = false; controls.enablePan = false;
 let userZoom = 1;
-renderer.domElement.addEventListener('wheel', e => { e.preventDefault(); userZoom = clamp(userZoom * (1 + e.deltaY * 0.001), 0.45, 2.2); }, { passive: false });
+const wheelDelta = e => { let d = e.deltaY; if (e.deltaMode === 1) d *= 16; else if (e.deltaMode === 2) d *= innerHeight; return Math.max(-120, Math.min(120, d)); };
+let zoomTarget = 1;
+renderer.domElement.addEventListener('wheel', e => { e.preventDefault(); zoomTarget = clamp(zoomTarget * Math.exp(wheelDelta(e) * 0.0012), 0.45, 2.2); }, { passive: false });
 
 const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(40, 60, 80); scene.add(key);
 const rim = new THREE.DirectionalLight(0x9fc4ff, 1.0); rim.position.set(-70, 20, -60); scene.add(rim);
@@ -694,6 +696,7 @@ if (params.has('t')) { T = +params.get('t'); playing = false; }
 let last = performance.now();
 function tick(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  userZoom += (zoomTarget - userZoom) * (1 - Math.exp(-dt * 7));
   if (playing && !scrubbing) T = (T + dt * speed) % L;
   if (!scrubbing) scrub.value = Math.round(T / L * 1000);
   controls.update();
