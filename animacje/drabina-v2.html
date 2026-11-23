@@ -573,7 +573,14 @@ function cameraPose(t){const i=sceneAt(t),u=(t-T[i])/S[i].d;camPose(i,u,P0,T0);
 const wheelDelta=e=>{let d=e.deltaY;if(e.deltaMode===1)d*=16;else if(e.deltaMode===2)d*=innerHeight;return Math.max(-120,Math.min(120,d));};
 let zK=1,zT=1,baseDist=10;
 renderer.domElement.addEventListener('wheel',e=>{e.preventDefault();zT=Math.max(0.3,Math.min(2.2,zT*Math.exp(wheelDelta(e)*0.0012)));},{passive:false});
-function placeCamera(t){cameraPose(t);baseDist=P0.distanceTo(T0);P0.sub(T0).multiplyScalar(zK).add(T0);if(P0.y<0.35)P0.y=0.35;camera.position.copy(P0);camera.lookAt(T0);return T0;}
+/* keep the camera outside the building (box + margin) */
+const BLD={x0:-4.17,x1:4.17,y1:WALL_H+0.05,z0:-6.17,z1:0.15+0.05},CM=0.25;
+function keepOut(v){const x0=BLD.x0-CM,x1=BLD.x1+CM,y1=BLD.y1+CM,z0=BLD.z0-CM,z1=BLD.z1+CM;
+  if(v.x>x0&&v.x<x1&&v.y<y1&&v.z>z0&&v.z<z1){
+    const pen=[[v.x-x0,'x',x0],[x1-v.x,'x',x1],[y1-v.y,'y',y1],[v.z-z0,'z',z0],[z1-v.z,'z',z1]].sort((a,b)=>a[0]-b[0])[0];
+    v[pen[1]]=pen[2];}
+  if(v.y<0.35)v.y=0.35;return v;}
+function placeCamera(t){cameraPose(t);baseDist=P0.distanceTo(T0);P0.sub(T0).multiplyScalar(zK).add(T0);keepOut(P0);camera.position.copy(P0);camera.lookAt(T0);return T0;}
 
 /* ================= UI ================= */
 const track=$('#track');
@@ -616,7 +623,7 @@ function frame(){requestAnimationFrame(frame);
   zK+=(zT-zK)*(1-Math.exp(-dt*7));
   apply(t,dt);
   if(playing||dragging){const tg=placeCamera(t);if(!playing)controls.target.copy(tg);}
-  else{controls.update();const off=camera.position.clone().sub(controls.target);off.setLength(Math.max(1,baseDist*zK));camera.position.copy(controls.target).add(off);if(camera.position.y<0.35)camera.position.y=0.35;}
+  else{controls.update();const off=camera.position.clone().sub(controls.target);off.setLength(Math.max(1,baseDist*zK));camera.position.copy(controls.target).add(off);keepOut(camera.position);}
   const i=sceneAt(t);if(i!==lastScene){lastScene=i;updateCaption();}
   segs.forEach((s,j)=>{s.firstChild.style.width=(clamp((t-T[j])/S[j].d)*100)+'%';s.classList.toggle('cur',j===i);});
   $('#metaL').innerHTML=`<b>${S[i].e||(i?'Finał':'Intro')}</b>`;$('#metaR').textContent=`${mm(t)} / ${mm(TEND)}`;
