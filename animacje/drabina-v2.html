@@ -143,7 +143,7 @@ const MOBILE=innerWidth<760||matchMedia('(pointer:coarse)').matches;const LQ=loc
 let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646;};
 
 /* ================= renderer / scene ================= */
-const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance',logarithmicDepthBuffer:true});
 renderer.setPixelRatio(LQ?1:Math.min(devicePixelRatio,MOBILE?1.75:2));
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=0.66;
@@ -154,7 +154,7 @@ const MAX_ANISO=renderer.capabilities.getMaxAnisotropy();
 const scene=new THREE.Scene();
 scene.fog=new THREE.Fog(0xc4d2de,40,150);
 
-const camera=new THREE.PerspectiveCamera(38,1,0.03,500);
+const camera=new THREE.PerspectiveCamera(38,1,0.05,500);
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;controls.enabled=false;controls.minDistance=1;controls.maxDistance=30;controls.maxPolarAngle=Math.PI*0.49;controls.enableZoom=false;
 
@@ -165,7 +165,7 @@ const sunDir=new THREE.Vector3();
 const hemi=new THREE.HemisphereLight(0xcfe0ff,0x56644a,0.7);scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xfff1de,3.4);sun.castShadow=true;
 {const ms=LQ?1024:MOBILE?2048:4096;sun.shadow.mapSize.set(ms,ms);}
-Object.assign(sun.shadow.camera,{left:-11,right:11,top:11,bottom:-6,near:1,far:60});sun.shadow.bias=-0.0003;sun.shadow.normalBias=0.025;
+Object.assign(sun.shadow.camera,{left:-11,right:11,top:11,bottom:-6,near:1,far:60});sun.shadow.bias=-0.0004;sun.shadow.normalBias=0.04;
 scene.add(sun);scene.add(sun.target);
 function setSun(elev,azim){sunDir.setFromSphericalCoords(1,THREE.MathUtils.degToRad(90-elev),THREE.MathUtils.degToRad(azim));
   SU.sunPosition.value.copy(sunDir);sun.position.copy(sunDir).multiplyScalar(30);}
@@ -279,12 +279,13 @@ const plinth=box(8.02,0.45,1,M.mosaic,scene,0,0.225,0);
 const facade=new THREE.Group();scene.add(facade);
 
 function windowAt(x,y,w,h,parent,opts={}){const g=new THREE.Group();g.position.set(x,y,0);
-  box(w+0.16,h+0.16,0.03,M.reveal,g,0,0,0.005,false);
-  const fm=opts.white?M.pvcW:M.pvc;
-  box(w,h,0.06,fm,g,0,0,0.02);
-  box(w-0.1,h-0.1,0.02,M.glass,g,0,0,0.045,false);
-  if(w>0.8)box(0.06,h-0.06,0.065,fm,g,0,0,0.025);
-  box(w+0.12,0.03,0.14,M.sill,g,0,-h/2-0.03,0.06);
+  const fm=opts.white?M.pvcW:M.pvc, f=0.06;
+  const rv=box(w+0.16,h+0.16,0.02,M.reveal,g,0,0,0.0,false);rv.receiveShadow=false;
+  const gl=box(w-f,h-f,0.01,M.glass,g,0,0,0.018,false);gl.receiveShadow=false;
+  // frame as four bars (no overlapping faces with the glass)
+  [[0,(h-f)/2,w,f],[0,-(h-f)/2,w,f],[-(w-f)/2,0,f,h-2*f],[(w-f)/2,0,f,h-2*f]].forEach(([bx,by,bw,bh])=>box(bw,bh,0.05,fm,g,bx,by,0.035,false));
+  if(w>0.8)box(0.05,h-2*f,0.05,fm,g,0,0,0.035,false);
+  box(w+0.12,0.03,0.14,M.sill,g,0,-h/2-0.03,0.07);
   parent.add(g);return g;}
 const V={dom:new THREE.Group(),blok:new THREE.Group(),hala:new THREE.Group()};
 Object.values(V).forEach(g=>facade.add(g));
@@ -371,7 +372,7 @@ box(0.05,0.03,0.006,M.dark,padlock,0,0.035,0);box(0.07,0.06,0.03,M.orange,padloc
 {const s=new THREE.Mesh(new THREE.TorusGeometry(0.022,0.006,8,20,Math.PI),M.bolt);s.position.y=0.01;padlock.add(s);}
 lockPivot.visible=false;
 // roof exit: goosenecks over the parapet (built for final wall distance)
-const D_FINAL=0.31;
+const D_FINAL=0.28;
 function gooseCurve(x){const z0=0;const P=[[x,TOP-0.05,z0],[x,TOP+0.08,z0-0.06],[x,TOP+0.12,-0.25],[x,TOP+0.06,-D_FINAL-0.12],[x,TOP-0.25,-D_FINAL-0.38],[x,DECK+0.6,-D_FINAL-0.5],[x,DECK+0.03,-D_FINAL-0.52]];
   return new THREE.CatmullRomCurve3(P.map(p=>new THREE.Vector3(...p)),false,'catmullrom',0.4);}
 const goose=[-RX,RX].map(x=>{const geo=new THREE.TubeGeometry(gooseCurve(x),90,0.0168,14,false);const m=new THREE.Mesh(geo,M.steel);m.castShadow=true;m.visible=false;lad.add(m);m.userData.count=geo.index.count;return m;});
@@ -475,7 +476,7 @@ function apply(t,dt){
   // wall distance (scene 6)
   let d=0.20;
   if(t>=T[6]){const v=(t-T[6])/S[6].d;d=0.20+(0.41-0.20)*ease(clamp((v-.2)/.3))+(D_FINAL-0.41)*ease(clamp((v-.64)/.24));}
-  const insT=d-0.08;
+  const insT=0.15; // facade stays put, only the ladder moves
   lad.position.z=d;ins.scale.z=insT;ins.position.z=insT/2;facade.position.z=insT;
   capFront.scale.z=insT+0.29;capFront.position.z=(insT+0.29)/2-0.27;
   plinth.scale.z=insT+0.012;plinth.position.z=(insT+0.012)/2;
