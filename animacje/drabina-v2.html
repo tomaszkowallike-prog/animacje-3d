@@ -247,7 +247,7 @@ const ground=new THREE.Mesh(new THREE.PlaneGeometry(400,400),M.grass);ground.rot
 grassTex.repeat.set(140,140);
 box(8.6,0.03,0.55,M.gravel,scene,0,0.015,0.55,false);           // gravel strip
 {const p=box(1.5,0.04,9,M.pave,scene,2.5,0.02,5.2,false);p.material=M.pave.clone();p.material.map=paveTex.clone();p.material.map.repeat.set(1.5,9);}
-{const p=box(26,0.04,1.8,M.pave,scene,0,0.02,10.4,false);p.material=M.pave.clone();p.material.map=paveTex.clone();p.material.map.repeat.set(26,1.8);}
+{const p=box(26,0.046,1.8,M.pave,scene,0,0.023,10.4,false);p.material=M.pave.clone();p.material.map=paveTex.clone();p.material.map.repeat.set(26,1.8);}
 
 // trees & bushes
 function tree(x,z,s=1){const g=new THREE.Group();g.position.set(x,0,z);g.scale.setScalar(s);
@@ -263,13 +263,13 @@ bush(-4.6,1.1);bush(-3.6,1.2,.8);bush(4.9,1.1,1.1);bush(1.4,1.2,.7);bush(-1.6,1.
 
 /* ================= building ================= */
 box(8,DECK,6,M.plasterSide,scene,0,DECK/2,-3);
-const roofDeck=box(7.5,0.05,5.5,M.roof,scene,0,DECK+0.025,-3);
+const roofDeck=box(7.46,0.05,5.46,M.roof,scene,0,DECK+0.025,-3);
 // parapets (attyka)
-box(8,WALL_H-DECK,0.25,M.plasterSide,scene,0,DECK+(WALL_H-DECK)/2,-0.125);
-box(8,WALL_H-DECK,0.25,M.plasterSide,scene,0,DECK+(WALL_H-DECK)/2,-5.875);
+box(7.5,WALL_H-DECK,0.25,M.plasterSide,scene,0,DECK+(WALL_H-DECK)/2,-0.125);
+box(7.5,WALL_H-DECK,0.25,M.plasterSide,scene,0,DECK+(WALL_H-DECK)/2,-5.875);
 box(0.25,WALL_H-DECK,6,M.plasterSide,scene,-3.875,DECK+(WALL_H-DECK)/2,-3);
 box(0.25,WALL_H-DECK,6,M.plasterSide,scene,3.875,DECK+(WALL_H-DECK)/2,-3);
-box(8.08,0.04,0.34,M.cap,scene,0,WALL_H+0.02,-5.875);box(0.34,0.04,6,M.cap,scene,-3.875,WALL_H+0.02,-3);box(0.34,0.04,6,M.cap,scene,3.875,WALL_H+0.02,-3);
+box(8.08,0.04,0.34,M.cap,scene,0,WALL_H+0.02,-5.875);box(0.34,0.04,5.36,M.cap,scene,-3.875,WALL_H+0.02,-3);box(0.34,0.04,5.36,M.cap,scene,3.875,WALL_H+0.02,-3);
 const ins=new THREE.Mesh(new THREE.BoxGeometry(8,WALL_H,1),[M.eps,M.eps,M.epsFront,M.epsFront,M.epsFront,M.epsFront]);ins.position.y=WALL_H/2;ins.castShadow=true;ins.receiveShadow=true;scene.add(ins);
 const capFront=box(8.12,0.04,1,M.cap,scene,0,WALL_H+0.02,0);
 const plinth=box(8.02,0.45,1,M.mosaic,scene,0,0.225,0);
@@ -305,8 +305,8 @@ for(const x of [-3.1,-1.9,1.9,3.1]) for(const y of [1.0,2.25,3.4]) windowAt(x,y,
 {const a=box(1.0,0.65,0.7,M.grey,R.blok,2.4,DECK+0.33,-1.6);const f=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.22,0.02,24),M.pvc);f.rotation.x=Math.PI/2;f.position.set(2.4,DECK+0.33,-1.24);R.blok.add(f);}
 box(1.4,0.9,1.2,M.grey,R.blok,-2.4,DECK+0.45,-3.5);
 // hala
-{const cl=box(8.0,WALL_H-0.47,0.03,M.clad,V.hala,0,0.45+(WALL_H-0.47)/2,0.016);}
-{box(2.4,2.8,0.08,M.grey,V.hala,2.6,0.45+1.4,0.06);for(let y=0.62;y<3.2;y+=0.34)box(2.4,0.025,0.1,M.pipe,V.hala,2.6,y,0.07,false);}
+{const cl=box(8.03,WALL_H-0.47,0.03,M.clad,V.hala,0,0.45+(WALL_H-0.47)/2,0.016);}
+{box(2.4,2.8,0.08,M.grey,V.hala,2.6,0.45+1.4,0.06);for(let y=0.62;y<3.2;y+=0.34)box(2.34,0.025,0.03,M.pipe,V.hala,2.6,y,0.112,false);}
 box(3.2,0.45,0.05,M.glass,V.hala,-2.2,3.2,0.04,false);
 {box(1.8,0.35,1.3,new THREE.MeshStandardMaterial({color:0xa9d4ee,transparent:true,opacity:.75,metalness:.2,roughness:.1}),R.hala,2.0,DECK+0.18,-2.6);}
 const VARC={dom:new THREE.Color(0xd6c8b0),blok:new THREE.Color(0xc9c4bb),hala:new THREE.Color(0xa8b0b8)};
