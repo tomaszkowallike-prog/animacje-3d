@@ -597,7 +597,8 @@ let t=0,playing=true,lastScene=-1,dragging=false;
 const playBtn=$('#play');
 const ICON_PAUSE='<svg viewBox="0 0 20 20"><rect x="4" y="3" width="4" height="14" rx="1" fill="currentColor"/><rect x="12" y="3" width="4" height="14" rx="1" fill="currentColor"/></svg>';
 const ICON_PLAY='<svg viewBox="0 0 20 20"><path d="M5 3 L17 10 L5 17 Z" fill="currentColor"/></svg>';
-function setPlaying(p){playing=p;playBtn.innerHTML=p?ICON_PAUSE:ICON_PLAY;playBtn.setAttribute('aria-label',p?'Pauza':'Odtwórz');
+let ret=null; // smooth fly-back from the user's free camera to the scripted shot
+function setPlaying(p){if(p&&!playing&&controls.enabled)ret={p:camera.position.clone(),q:controls.target.clone(),k:0};playing=p;playBtn.innerHTML=p?ICON_PAUSE:ICON_PLAY;playBtn.setAttribute('aria-label',p?'Pauza':'Odtwórz');
   controls.enabled=!p;$('#hint').style.opacity=p?0:1;if(!p){controls.target.copy(placeCamera(t));controls.update();}}
 playBtn.onclick=()=>setPlaying(!playing);
 renderer.domElement.addEventListener('pointerdown',()=>{if(justUnlocked){justUnlocked=false;return;}if(playing)setPlaying(false);});
@@ -627,7 +628,7 @@ function unlock(e){if(unlocked)return;if(e.target&&e.target.closest&&e.target.cl
     if(e.type==='pointerdown'&&e.target===renderer.domElement)justUnlocked=true;}}
 addEventListener('pointerdown',unlock,true);addEventListener('keydown',unlock,true);
 function syncVO(){if(!soundOn)return;
-  const want=playing&&!dragging;
+  const want=playing&&!dragging&&!ret;
   if(!want){if(!vo.paused)vo.pause();return;}
   const dur=vo.duration||0;
   if(t>=dur-0.05){if(!vo.paused)vo.pause();return;}
@@ -650,10 +651,19 @@ function placeLabels(){const w=innerWidth,h=innerHeight;
 const clock=new THREE.Clock();
 function frame(){requestAnimationFrame(frame);
   const dt=Math.min(clock.getDelta(),0.1);
-  if(playing&&!dragging){t+=dt;if(t>=TEND)t=0;}
+  if(playing&&!dragging&&!ret){t+=dt;if(t>=TEND)t=0;}
   zK+=(zT-zK)*(1-Math.exp(-dt*7));
   apply(t,dt);
-  if(playing||dragging){const tg=placeCamera(t);if(!playing)controls.target.copy(tg);}
+  if(ret&&playing&&!dragging){
+    ret.k+=dt/1.4;const k=smoother(clamp(ret.k));
+    const tg=placeCamera(t).clone(),sp=camera.position.clone();
+    const pos=ret.p.clone().lerp(sp,k),q=ret.q.clone().lerp(tg,k);
+    // gentle pull-back arc so it reads as a quick zoom-out, not a cut
+    const lift=Math.sin(Math.PI*k)*0.18*Math.max(ret.p.distanceTo(ret.q),sp.distanceTo(tg));
+    pos.sub(q).multiplyScalar(1+lift/Math.max(1,pos.distanceTo(q))).add(q);
+    keepOut(pos);camera.position.copy(pos);camera.lookAt(q);
+    if(ret.k>=1)ret=null;}
+  else if(playing||dragging){const tg=placeCamera(t);if(!playing)controls.target.copy(tg);}
   else{controls.update();const off=camera.position.clone().sub(controls.target);off.setLength(Math.max(1,baseDist*zK));camera.position.copy(controls.target).add(off);keepOut(camera.position);}
   const i=sceneAt(t);if(i!==lastScene){lastScene=i;updateCaption();}
   segs.forEach((s,j)=>{s.firstChild.style.width=(clamp((t-T[j])/S[j].d)*100)+'%';s.classList.toggle('cur',j===i);});
